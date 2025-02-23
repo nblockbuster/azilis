@@ -1,3 +1,0 @@
-[submodule "crates/rrise"]
-	path = crates/rrise
-	url = https://github.com/dtaralla/rrise.git
