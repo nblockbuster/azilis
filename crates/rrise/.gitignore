@@ -1,0 +1,12 @@
+.idea/
+target/
+Cargo.lock
+examples/WwiseProject/
+examples/WwiseProject/.cache/
+examples/WwiseProject/*.prof
+examples/WwiseProject/*.validationcache
+examples/WwiseProject/*.wsettings
+examples/WwiseProject/*.log
+examples/WwiseProject/GeneratedSoundBanks/
+*.akd
+*.cache
