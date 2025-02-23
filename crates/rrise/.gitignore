@@ -10,3 +10,5 @@ examples/WwiseProject/*.log
 examples/WwiseProject/GeneratedSoundBanks/
 *.akd
 *.cache
+*.exe
+*.pdb
