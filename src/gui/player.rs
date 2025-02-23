@@ -355,7 +355,7 @@ fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
     {
         #[cfg(feature = "profiler")]
         profiling::scope!("load externals");
-        // let pb = PBar::new(tracks.len() as u64, false);
+
         // TODO: speed
         tracks
             .clone()

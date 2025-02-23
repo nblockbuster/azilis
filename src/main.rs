@@ -1,6 +1,5 @@
 mod gui;
 mod package_manager;
-mod pbar;
 pub mod util;
 
 use anyhow::Result;

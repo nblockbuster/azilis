@@ -14,7 +14,7 @@ fn get_msvc_env_paths(env_key: &str) -> io::Result<Vec<PathBuf>> {
             return Err(io::Error::new(
                 ErrorKind::NotFound,
                 "Can't find TARGET cargo environment variable",
-            ))
+            ));
         }
     };
 
@@ -27,7 +27,7 @@ fn get_msvc_env_paths(env_key: &str) -> io::Result<Vec<PathBuf>> {
                     "Can't find cl.exe tool given by target triple {}",
                     target_env
                 ),
-            ))
+            ));
         }
     };
 
@@ -63,12 +63,12 @@ fn stream_cc_platform_specifics(build: &mut cc::Build, wwise_sdk: &PathBuf) -> i
     let msvc_include_paths = get_msvc_env_paths("INCLUDE")?;
     let msvc_libs = get_msvc_env_paths("LIB")?;
 
-    for lib in msvc_libs {
-        println!(
-            "cargo:rustc-link-search={}",
-            lib.into_os_string().into_string().unwrap()
-        );
-    }
+    // for lib in msvc_libs {
+    //     println!(
+    //         "cargo:rustc-link-search={}",
+    //         lib.into_os_string().into_string().unwrap()
+    //     );
+    // }
 
     build
         .file(wwise_sdk.join(r"samples\SoundEngine\Win32\AkDefaultIOHookBlocking.cpp"))
@@ -109,22 +109,22 @@ fn platform_dependencies(wwise_sdk: &PathBuf, config_folder: &str) {
         )
     }
 
-    println!(
-        "cargo:rustc-link-search={}",
-        path.join(config_folder)
-            .join("lib")
-            .into_os_string()
-            .into_string()
-            .unwrap()
-    );
-    println!(
-        "cargo:rustc-link-search={}",
-        path.join(config_folder)
-            .join("bin")
-            .into_os_string()
-            .into_string()
-            .unwrap()
-    ); // For effect dlls
+    // println!(
+    //     "cargo:rustc-link-search={}",
+    //     path.join(config_folder)
+    //         .join("lib")
+    //         .into_os_string()
+    //         .into_string()
+    //         .unwrap()
+    // );
+    // println!(
+    //     "cargo:rustc-link-search={}",
+    //     path.join(config_folder)
+    //         .join("bin")
+    //         .into_os_string()
+    //         .into_string()
+    //         .unwrap()
+    // ); // For effect dlls
 
     println!("cargo:rustc-link-lib=dylib=winmm");
     println!("cargo:rustc-link-lib=dylib=dsound");
@@ -132,9 +132,9 @@ fn platform_dependencies(wwise_sdk: &PathBuf, config_folder: &str) {
     println!("cargo:rustc-link-lib=dylib=XInput");
     println!("cargo:rustc-link-lib=dylib=user32");
 
-    #[cfg(not(wwrelease))]
-    {
-        println!("cargo:rustc-link-lib=dylib=AkAutobahn"); // for WAAPI support in game editors
-        println!("cargo:rustc-link-lib=dylib=ws2_32"); // for profiling networking
-    }
+    // #[cfg(not(wwrelease))]
+    // {
+    //     println!("cargo:rustc-link-lib=dylib=AkAutobahn"); // for WAAPI support in game editors
+    //     println!("cargo:rustc-link-lib=dylib=ws2_32"); // for profiling networking
+    // }
 }
