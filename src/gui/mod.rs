@@ -1,16 +1,23 @@
 mod bank_list;
+mod color;
 mod icons;
-mod player;
+pub mod player;
 mod style;
 
 use bank_list::BankListView;
 use destiny_pkg::TagHash;
 use eframe::egui::{self, Align2, Color32, CornerRadius, TextEdit, Vec2, Widget};
 use egui_notify::Toasts;
+use icons::ICON_STOP;
 use lazy_static::lazy_static;
 use player::{BankStatus, PlayerView, bank_progress};
-use rrise::sound_engine::set_game_object_output_bus_volume;
+use poll_promise::Promise;
+use rrise::sound_engine::{
+    clear_banks, set_game_object_output_bus_volume, unregister_all_game_obj,
+};
 use std::sync::{Arc, Mutex};
+
+use crate::{config, term_sound_engine};
 
 lazy_static! {
     pub static ref TOASTS: Arc<Mutex<Toasts>> = Arc::new(Mutex::new(Toasts::new()));
@@ -19,7 +26,7 @@ lazy_static! {
 #[derive(PartialEq)]
 pub enum Panel {
     BankList,
-    Player,
+    // Player,
 }
 
 pub enum ViewAction {
@@ -30,7 +37,7 @@ pub trait View {
 }
 
 pub struct AzilisApp {
-    player_view: PlayerView,
+    // player_view: PlayerView,
     bank_list_view: BankListView,
 
     open_panel: Panel,
@@ -55,13 +62,6 @@ impl AzilisApp {
             egui::FontData::from_static(include_bytes!("../../assets/fonts/Destiny_Keys.otf"))
                 .into(),
         );
-        fonts.font_data.insert(
-            "AtkinsonHyperlegibleNext".into(),
-            egui::FontData::from_static(include_bytes!(
-                "../../assets/fonts/AtkinsonHyperlegibleNext-VariableFont_wght.ttf"
-            ))
-            .into(),
-        );
 
         fonts
             .families
@@ -73,20 +73,15 @@ impl AzilisApp {
             .entry(egui::FontFamily::Proportional)
             .or_default()
             .insert(1, "Destiny_Keys".to_owned());
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .insert(2, "AtkinsonHyperlegibleNext".to_owned());
 
         cc.egui_ctx.set_fonts(fonts);
-        set_game_object_output_bus_volume(100, 1, 0.1).unwrap();
+        set_game_object_output_bus_volume(100, 1, config!().audio.volume).unwrap();
 
         AzilisApp {
-            player_view: PlayerView::new(),
+            // player_view: PlayerView::new(),
             bank_list_view: BankListView::new(),
-            open_panel: Panel::Player,
-            volume_control: 0.1,
+            open_panel: Panel::BankList,
+            volume_control: config!().audio.volume,
             tag_input: String::new(),
             tag_split: false,
             tag_split_input: (String::new(), String::new()),
@@ -97,8 +92,19 @@ impl AzilisApp {
 impl eframe::App for AzilisApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let mut is_loading = false;
-        if let Some(bank_promise) = self.player_view.bank_load.as_ref() {
-            if bank_promise.poll().is_pending() {
+        if self.bank_list_view.player_view.bank_load.as_ref().is_some()
+            || self.bank_list_view.list_load.as_ref().is_some()
+        {
+            let promise =
+                if let Some(bank_promise) = self.bank_list_view.player_view.bank_load.as_ref() {
+                    bank_promise
+                } else if let Some(list_promise) = self.bank_list_view.list_load.as_ref() {
+                    list_promise
+                } else {
+                    &Promise::spawn_thread("fake", Default::default)
+                };
+
+            if promise.poll().is_pending() {
                 {
                     let painter = ctx.layer_painter(egui::LayerId::background());
                     painter.rect_filled(
@@ -156,7 +162,7 @@ impl eframe::App for AzilisApp {
                             && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     } else {
                         submitted |= TextEdit::singleline(&mut self.tag_input)
-                            .hint_text("32/64-bit hex tag")
+                            .hint_text("32")
                             .desired_width(128. + 8.)
                             .ui(ui)
                             .lost_focus()
@@ -200,17 +206,19 @@ impl eframe::App for AzilisApp {
                         .changed()
                     {
                         set_game_object_output_bus_volume(100, 1, self.volume_control).unwrap();
+                        config::with_mut(|c| c.audio.volume = self.volume_control);
                     }
                 });
                 ui.separator();
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.open_panel, Panel::BankList, "Bank List");
-                    ui.selectable_value(&mut self.open_panel, Panel::Player, "Player");
+                    // ui.selectable_value(&mut self.open_panel, Panel::Player, "Player");
                 });
-                // ui.separator();
+                ui.separator();
                 let action = match self.open_panel {
-                    Panel::Player => self.player_view.view(ctx, ui),
+                    // Panel::Player => self.player_view.view(ctx, ui),
                     Panel::BankList => self.bank_list_view.view(ctx, ui),
+                    _ => None,
                 };
 
                 if let Some(action) = action {
@@ -227,7 +235,17 @@ impl eframe::App for AzilisApp {
 impl AzilisApp {
     fn open_bank(&mut self, tag: TagHash) {
         let new_view = PlayerView::create(tag);
-        self.player_view = new_view;
-        self.open_panel = Panel::Player;
+        self.bank_list_view.player_view.stop();
+        self.bank_list_view.player_view = new_view;
+        // self.open_panel = Panel::Player;
+    }
+}
+
+impl Drop for AzilisApp {
+    fn drop(&mut self) {
+        clear_banks().unwrap();
+        unregister_all_game_obj().unwrap();
+        term_sound_engine().unwrap();
+        config::persist();
     }
 }

@@ -1,18 +1,11 @@
 #![feature(const_copy_from_slice)]
 
 pub mod hierarchy;
-use hierarchy::{
-    music::{AudioPathElement, AudioPathNode},
-    *,
-};
+use hierarchy::{music::AudioPathElement, *};
 
 use anyhow::Result;
-use binrw::{BinRead, BinReaderExt, BinResult, binrw};
-use chroma_dbg::ChromaDebug;
-use std::{
-    collections::HashMap,
-    io::{Cursor, Seek, SeekFrom},
-};
+use binrw::{BinRead, BinReaderExt};
+use std::io::Cursor;
 
 macro_rules! fourcc {
     ($bytes:expr) => {{

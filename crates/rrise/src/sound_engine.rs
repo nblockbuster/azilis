@@ -187,11 +187,63 @@ pub fn set_offline_rendering(enable_offline_rendering: bool) -> Result<(), AkRes
 /// > - [AK_InvalidParameter](AkResult::AK_InvalidParameter): Out of range parameters or unsupported parameter combinations on in_settings
 /// > - [AK_Success](AkResult::AK_InvalidParameter): parameters were valid, and the remove and add will occur.
 pub fn replace_output(
-    settings: *const AkOutputSettings,
+    settings: &mut AkOutputSettings,
     output_device_id: AkOutputDeviceID,
 ) -> Result<AkOutputDeviceID, AkResult> {
     let mut id = 0;
     ak_call_result!(ReplaceOutput(settings, output_device_id, &mut id) => id)
+}
+
+pub fn get_sample_rate() -> AkUInt32 {
+    unsafe { GetSampleRate() }
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct AkChannelConfig {
+    pub num_channels: u32,
+    pub config_type: u32,
+    pub channel_mask: u32,
+}
+
+impl AkChannelConfig {
+    pub fn set_standard(&mut self, channel_mask: u32) {
+        self.config_type = 0x1;
+        self.channel_mask = channel_mask;
+        self.num_channels = {
+            let mut chmsk = channel_mask;
+            let mut ch_num: u8 = 0;
+            while chmsk != 0 {
+                ch_num += 1;
+                chmsk &= chmsk - 1;
+            }
+            ch_num as u32
+        }
+    }
+
+    pub fn as_ak(&self) -> bindings::root::AkChannelConfig {
+        bindings::root::AkChannelConfig {
+            _bitfield_1: bindings::root::AkChannelConfig::new_bitfield_1(
+                self.num_channels,
+                self.config_type,
+                self.channel_mask,
+            ),
+            _bitfield_align_1: [0u32; 0],
+        }
+    }
+}
+
+pub fn channel_mask_to_num_channels(num_channels: u32) -> u32 {
+    match num_channels {
+        1 => AK_SPEAKER_SETUP_1_0_CENTER,
+        2 => AK_SPEAKER_SETUP_2_0,
+        3 => AK_SPEAKER_SETUP_2_1,
+        4 => AK_SPEAKER_SETUP_4_0,
+        5 => AK_SPEAKER_SETUP_5_0,
+        6 => AK_SPEAKER_SETUP_5_1,
+        7 => AK_SPEAKER_SETUP_7,
+        8 => AK_SPEAKER_SETUP_7POINT1,
+        _ => 0,
+    }
 }
 
 /// Registers a callback used for retrieving audio samples.
@@ -201,12 +253,34 @@ pub fn replace_output(
 /// > - [add_output]
 /// > - [get_output_id]
 /// > - [unregister_capture_callback]
-pub fn register_capture_callback(
-    callback: AkCaptureCallbackFunc,
+pub fn register_capture_callback<F>(
+    callback: F,
     id_output: AkOutputDeviceID,
-    cookie: *mut std::ffi::c_void,
-) -> Result<(), AkResult> {
-    ak_call_result!(RegisterCaptureCallback(callback, id_output, cookie))
+) -> Result<(), AkResult>
+where
+    F: FnMut(AkAudioBuffer) + 'static,
+{
+    let data = Box::into_raw(Box::new(callback));
+    ak_call_result!(RegisterCaptureCallback(
+        Some(call_callback_as_closure::<F>),
+        id_output,
+        data as *mut _
+    ))
+}
+
+unsafe extern "C" fn call_callback_as_closure<F>(
+    cb_capture_buffer: *mut bindings::root::AkAudioBuffer,
+    cb_id: u64,
+    cb_cookie: *mut std::ffi::c_void,
+) where
+    F: FnMut(AkAudioBuffer),
+{
+    let callback_ptr: *mut F = cb_cookie as *mut F;
+    let callback = &mut *callback_ptr;
+
+    // Info needed: is this safe if the callback panics? Should we do something with
+    // catch_unwind? Is this undefined behavior?
+    callback(*cb_capture_buffer);
 }
 
 /// Unregisters a callback used for retrieving audio samples.
@@ -826,11 +900,12 @@ impl<'a> PostEvent<'a> {
 
     /// Posts the event to the sound engine.
     pub fn post(&mut self) -> Result<AkPlayingID, AkResult> {
-        let mut extsrc = Vec::new(); // = self.external_sources.iter().for_each(|x| x = x.as_ak());
-        for s in self.external_sources.iter_mut() {
-            let b = s.as_ak();
-            extsrc.push(b);
-        }
+        let mut extsrc = self
+            .external_sources
+            .iter_mut()
+            .map(|x: &mut AkExternalSourceInfo| x.as_ak())
+            .collect::<Vec<crate::bindings::root::AkExternalSourceInfo>>();
+
         if let AkID::Name(name) = self.event_id {
             let ak_playing_id = unsafe {
                 with_cstring![name => cname {

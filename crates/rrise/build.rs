@@ -74,6 +74,7 @@ fn main() -> io::Result<()> {
     println!("Selected Wwise config: {}", config_folder);
     platform_dependencies(&wwise_sdk, config_folder);
 
+    // #[cfg(debug_assertions)]
     #[cfg(not(wwrelease))]
     println!("cargo:rustc-link-lib=static=CommunicationCentral");
     // --- END SETUP BUILD ENV
@@ -174,12 +175,14 @@ fn main() -> io::Result<()> {
 
     stream_cc_platform_specifics(&mut build, &wwise_sdk)?;
 
+    // #[cfg(debug_assertions)]
     #[cfg(wwdebug)]
     build.flag_if_supported("-Z7").define("_DEBUG", None);
 
     #[cfg(not(debug_assertions))]
     build.define("NDEBUG", None);
 
+    // #[cfg(not(debug_assertions))]
     #[cfg(wwrelease)]
     build.define("AK_OPTIMIZED", None);
 
@@ -194,6 +197,30 @@ fn main() -> io::Result<()> {
             "-I{}",
             wwise_sdk
                 .join("include")
+                .into_os_string()
+                .into_string()
+                .unwrap()
+        ))
+        .clang_arg(format!(
+            "-I{}",
+            wwise_sdk
+                .join("samples")
+                .join("SoundEngine")
+                .join("Common")
+                .into_os_string()
+                .into_string()
+                .unwrap()
+        ))
+        .clang_arg(format!(
+            "-I{}",
+            wwise_sdk
+                .join("samples")
+                .join("SoundEngine")
+                .join(if cfg!(target_os = "windows") {
+                    "Win32"
+                } else {
+                    "POSIX"
+                })
                 .into_os_string()
                 .into_string()
                 .unwrap()

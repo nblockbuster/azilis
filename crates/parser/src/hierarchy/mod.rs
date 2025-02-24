@@ -2,14 +2,9 @@ pub mod audio;
 pub mod event;
 pub mod music;
 
-use std::{
-    default,
-    io::{Cursor, Seek, SeekFrom},
-};
+use std::io::{Cursor, Seek, SeekFrom};
 
-use audio::*;
 use event::*;
-use itertools::Itertools;
 use music::*;
 
 use binrw::{BinRead, BinReaderExt};

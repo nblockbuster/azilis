@@ -141,7 +141,7 @@ fn init_sound_engine() -> Result<(), AkResult> {
     // no need for spatial
 
     // init comms
-    #[cfg(not(wwrelease))]
+    #[cfg(debug_assertions)]
     communication::init(&AkCommSettings::default())?;
 
     Ok(())
@@ -149,7 +149,7 @@ fn init_sound_engine() -> Result<(), AkResult> {
 
 fn term_sound_engine() -> Result<(), AkResult> {
     // term comms
-    #[cfg(not(wwrelease))]
+    #[cfg(debug_assertions)]
     communication::term();
 
     // term spatial
@@ -202,9 +202,9 @@ fn setup_example_dll_path() -> AkInitSettings {
         path = wwise_sdk.join("Linux_x64");
     }
 
-    path = if cfg!(wwdebug) {
+    path = if cfg!(debug_assertions) {
         path.join("Debug")
-    } else if cfg!(wwrelease) {
+    } else if cfg!(not(debug_assertions)) {
         path.join("Release")
     } else {
         path.join("Profile")

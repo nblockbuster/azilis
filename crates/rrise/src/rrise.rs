@@ -103,8 +103,6 @@ pub use bindings::root::AkThreadProperties;
 #[doc(inline)]
 pub use bindings::root::AkUInt32;
 
-#[doc(inline)]
-pub use bindings::root::AKRESULT as AkResult;
 #[cfg(target_os = "linux")]
 #[doc(inline)]
 pub use bindings::root::AkAudioAPI;
@@ -128,6 +126,8 @@ pub use bindings::root::AkSoundPosition;
 pub use bindings::root::AkTransform;
 #[doc(inline)]
 pub use bindings::root::AkVector;
+#[doc(inline)]
+pub use bindings::root::AKRESULT as AkResult;
 
 pub use crate::bindings::root::AkMIDIEvent_tCc;
 pub use crate::bindings::root::AkMIDIEvent_tChanAftertouch;
@@ -138,10 +138,6 @@ pub use crate::bindings::root::AkMIDIEvent_tPitchBend;
 pub use crate::bindings::root::AkMIDIEvent_tProgramChange;
 pub use crate::bindings::root::AkMIDIEvent_tWwiseCmd;
 
-#[doc(inline)]
-pub use bindings::AK_INVALID_AUDIO_OBJECT_ID;
-#[doc(inline)]
-pub use bindings::AK_INVALID_GAME_OBJECT;
 #[doc(inline)]
 pub use bindings::root::AK_DEFAULT_BANK_IO_PRIORITY;
 #[doc(inline)]
@@ -184,6 +180,27 @@ pub use bindings::root::AK_MAX_PRIORITY;
 pub use bindings::root::AK_MIN_PRIORITY;
 #[doc(inline)]
 pub use bindings::root::AK_SOUNDBANK_VERSION;
+#[doc(inline)]
+pub use bindings::AK_INVALID_AUDIO_OBJECT_ID;
+#[doc(inline)]
+pub use bindings::AK_INVALID_GAME_OBJECT;
+
+pub use bindings::root::AK_SPEAKER_SETUP_0_1;
+pub use bindings::root::AK_SPEAKER_SETUP_1_0_CENTER;
+pub use bindings::root::AK_SPEAKER_SETUP_1_1_CENTER;
+pub use bindings::root::AK_SPEAKER_SETUP_2_0;
+pub use bindings::root::AK_SPEAKER_SETUP_2_1;
+pub use bindings::root::AK_SPEAKER_SETUP_3_0;
+pub use bindings::root::AK_SPEAKER_SETUP_3_1;
+pub use bindings::root::AK_SPEAKER_SETUP_4_0;
+pub use bindings::root::AK_SPEAKER_SETUP_4_1;
+pub use bindings::root::AK_SPEAKER_SETUP_5_0;
+pub use bindings::root::AK_SPEAKER_SETUP_5_1;
+pub use bindings::root::AK_SPEAKER_SETUP_6_0;
+pub use bindings::root::AK_SPEAKER_SETUP_6_1;
+pub use bindings::root::AK_SPEAKER_SETUP_7_0;
+pub use bindings::root::AK_SPEAKER_SETUP_7_1;
+pub use bindings::root::AK_SPEAKER_SETUP_FRONT;
 
 #[derive(Debug, Copy, Clone)]
 /// An ID for functions that can take either a string or numerical identifier for Wwise objects.
@@ -436,6 +453,21 @@ impl From<bindings::root::AkMIDIEvent> for AkMIDIEvent {
         }
     }
 }
+
+// /// Callback prototype used for audio capture callback registration.
+// /// This callback will be called at the end of each audio frame for each output device that has been registered.
+// /// \remarks This callback will be executed on the main audio thread during real-time rendering and will be executed on the thread that \ref AK::SoundEngine::RenderAudio is called from when offline rendering is enabled.
+// /// \remarks The processing time in the callback function should be minimal. Having too much processing time could cause voice starvation during real-time rendering.
+// /// \remarks Note that a callback registered with <tt>in_idOutput</tt> equal to <tt>AK_INVALID_OUTPUT_DEVICE_ID</tt>, will receive the <tt>AkOutputDeviceID</tt> associated with the main output device.
+// /// \sa
+// /// - AK::SoundEngine::RenderAudio()
+// /// - AK::SoundEngine::RegisterCaptureCallback()
+// /// - AK::SoundEngine::UnregisterCaptureCallback()
+// AK_CALLBACK(void, AkCaptureCallbackFunc)(
+// 	AkAudioBuffer& in_CaptureBuffer,			///< Capture audio buffer. The data is always float interleaved.
+// 	AkOutputDeviceID in_idOutput,				///< The audio device specific id, as passed to AK::SoundEngine::AddOutput or AK::SoundEngine::Init
+// 	void* in_pCookie							///< Callback cookie that will be sent to the callback function along with additional information
+// 	);
 
 #[derive(Debug, Clone)]
 /// Callback information used for all notifications sent from Wwise.
