@@ -1,3 +1,4 @@
+use chroma_dbg::ChromaDebug;
 use destiny_pkg::TagHash;
 use eframe::egui::ahash::HashMap;
 use eframe::egui::{Color32, Context, FontId, RichText, Ui};
@@ -40,6 +41,7 @@ pub const MUSIC_GROUP_ID: u32 = 1246133352;
 
 #[derive(Default)]
 pub struct BankData {
+    pub id: u32,
     // loaded_banks: Vec<u32>,
     pub play_event_id: u32,
     pub stop_event_id: u32,
@@ -69,7 +71,7 @@ impl Display for BankStatus {
                 current_file,
                 total_files,
             } => f.write_fmt(format_args!(
-                "Checking/Writing Files {}/{}",
+                "Loading Externals {}/{}",
                 current_file, total_files
             )),
         }
@@ -100,7 +102,7 @@ pub struct PlayerView {
     tag_data: Vec<u8>,
 
     pub bank_load: Option<Promise<BankData>>,
-    bank_data: Arc<Mutex<BankData>>,
+    pub bank_data: Arc<Mutex<BankData>>,
 
     current_switch_id: Arc<AtomicU32>,
 
@@ -111,6 +113,8 @@ pub struct PlayerView {
     apply_dropdown: bool,
 
     callback_infos: Arc<RwLock<HashMap<CallbackType, AkCallbackInfo>>>,
+    // pub loaded_bank: u32,
+    // pub old_bank: u32,
 }
 
 impl PlayerView {
@@ -139,6 +143,7 @@ impl PlayerView {
             callback_infos: Default::default(),
         }
     }
+
     pub fn create(tag: TagHash) -> Self {
         let t = package_manager().read_tag(tag);
         let tag_data = if t.is_err() {
@@ -193,8 +198,7 @@ impl PlayerView {
                         game_syncs::set_switch(MUSIC_GROUP_ID, switch, 100).unwrap();
                     }
                     last_switch = switch;
-                    const ALLOW_SYNC_RENDER: bool = true;
-                    render_audio(ALLOW_SYNC_RENDER).unwrap();
+                    render_audio(true).unwrap();
                 }
             })),
             switch_dropdown: String::new(),
@@ -280,6 +284,7 @@ impl View for PlayerView {
             .response;
 
         if self.apply_dropdown {
+            self.apply_dropdown = false;
             info!("Setting switch to {}", self.switch_dropdown);
             let dropdown_val = self.switch_dropdown.parse::<u32>();
             if dropdown_val.is_err() {
@@ -288,7 +293,6 @@ impl View for PlayerView {
             }
             self.current_switch_id
                 .store(dropdown_val.unwrap(), Ordering::Relaxed);
-            self.apply_dropdown = false;
         }
         let infos = self.callback_infos.clone();
         if change_event {
@@ -431,34 +435,34 @@ impl View for PlayerView {
 }
 
 pub fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
-    clear_banks()?;
+    // clear_banks()?;
     *BANK_PROGRESS.write() = BankStatus::LoadingBanks;
     let mut loaded_banks = Vec::new();
     let mut bank_data = Vec::new();
-    {
-        #[cfg(feature = "profiler")]
-        profiling::scope!("load banks from pkg");
+    // {
+    //     #[cfg(feature = "profiler")]
+    //     profiling::scope!("load banks from pkg");
 
-        let init_tags = package_manager().get_all_by_type(26, Some(5));
+    //     let init_tags = package_manager().get_all_by_type(26, Some(5));
 
-        {
-            let init_data = package_manager().read_tag(init_tags.first().unwrap().0)?;
-            let data_len = init_data.len() as u32;
-            bank_data.push(init_data);
-            let id = load_bank_memory_view(
-                bank_data[0].as_mut_ptr() as *mut std::ffi::c_void,
-                data_len,
-            )?;
-            loaded_banks.push(id);
-        }
-    }
+    //     {
+    //         let init_data = package_manager().read_tag(init_tags.first().unwrap().0)?;
+    //         let data_len = init_data.len() as u32;
+    //         bank_data.push(init_data);
+    //         let id = load_bank_memory_view(
+    //             bank_data[0].as_mut_ptr() as *mut std::ffi::c_void,
+    //             data_len,
+    //         )?;
+    //         loaded_banks.push(id);
+    //     }
+    // }
     let mut soundbank_sections = {
         #[cfg(feature = "profiler")]
         profiling::scope!("soundbank parse");
         let data_len = data.len() as u32;
         bank_data.push(data.to_vec());
         let id =
-            load_bank_memory_copy(bank_data[1].as_mut_ptr() as *mut std::ffi::c_void, data_len)?;
+            load_bank_memory_copy(bank_data[0].as_mut_ptr() as *mut std::ffi::c_void, data_len)?;
         loaded_banks.push(id);
 
         parser::parse(data)?
@@ -475,6 +479,8 @@ pub fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
             None
         })
         .unwrap();
+
+    // std::fs::write("temp/hirc.txt", format!("{:#?}", hirc))?;
 
     let tracks: Vec<MusicTrack> = hirc.get_all_by_type_cloned();
 
@@ -523,9 +529,9 @@ pub fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
 
     let stop_event = &hirc.filter_objects(|x: &Event| x.action_ids.contains(&stop_action.id))[0];
 
-    let tmpdir = std::env::temp_dir().join("azilis");
-    std::fs::create_dir_all(&tmpdir)?;
-    stream_mgr::add_base_path(tmpdir.to_str().unwrap())?;
+    // let tmpdir = std::env::temp_dir().join("azilis");
+    // std::fs::create_dir_all(&tmpdir)?;
+    // stream_mgr::add_base_path(tmpdir.to_str().unwrap())?;
 
     // *BANK_PROGRESS.write() = BankStatus::Externals { current_file: (), total_files: () };
 
@@ -535,58 +541,55 @@ pub fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
         profiling::scope!("load externals");
 
         // TODO: speed
-        tracks
-            .clone()
-            .par_iter_mut()
-            .try_for_each(|x| -> anyhow::Result<()> {
-                {
-                    let mut p = BANK_PROGRESS.write();
-                    let current_file = if let BankStatus::Externals { current_file, .. } = *p {
-                        current_file
-                    } else {
-                        0
-                    };
+        tracks.clone().par_iter_mut().for_each(|x| {
+            {
+                let mut p = BANK_PROGRESS.write();
+                let current_file = if let BankStatus::Externals { current_file, .. } = *p {
+                    current_file
+                } else {
+                    0
+                };
 
-                    *p = BankStatus::Externals {
-                        current_file: current_file + 1,
-                        total_files: tracks.len(),
-                    };
-                }
-                if x.sounds.is_empty() {
-                    return Err(anyhow::anyhow!("No sounds found"));
-                }
-                let th = package_manager().get_all_by_reference(x.sounds[0].audio_id)[0].0;
-                let head = package_manager().get_entry(th).unwrap();
-                let path = tmpdir.join(format!("{}.wem", head.reference));
-                if path.exists() {
-                    externals
-                        .lock()
-                        .unwrap()
-                        .push(AkExternalSourceInfo::from_id(
-                            head.reference,
-                            head.reference,
-                            AkCodecId::Vorbis,
-                        ));
+                *p = BankStatus::Externals {
+                    current_file: current_file + 1,
+                    total_files: tracks.len(),
+                };
+            }
+            if x.sounds.is_empty() {
+                return;
+                // return Err(anyhow::anyhow!("No sounds found"));
+            }
+            let th = package_manager().get_all_by_reference(x.sounds[0].audio_id)[0].0;
+            let head = package_manager().get_entry(th).unwrap();
+            // let path = tmpdir.join(format!("{}.wem", head.reference));
+            // if path.exists() {
+            //     externals
+            //         .lock()
+            //         .unwrap()
+            //         .push(AkExternalSourceInfo::from_id(
+            //             head.reference,
+            //             head.reference,
+            //             AkCodecId::Vorbis,
+            //         ));
 
-                    return Ok(());
-                }
-                trace!("Loading {:?}.wem", head.reference);
-                let data = package_manager().read_tag(th)?;
-                trace!("Writing {:?}.wem", head.reference);
+            //     return Ok(());
+            // }
+            // trace!("Loading {:?}.wem", head.reference);
+            // let data = package_manager().read_tag(th)?;
+            // trace!("Writing {:?}.wem", head.reference);
 
-                let mut file = std::fs::File::create(&path).unwrap();
-                file.write_all(&data).unwrap();
+            // let mut file = std::fs::File::create(&path).unwrap();
+            // file.write_all(&data).unwrap();
 
-                externals
-                    .lock()
-                    .unwrap()
-                    .push(AkExternalSourceInfo::from_id(
-                        head.reference,
-                        head.reference,
-                        AkCodecId::Vorbis,
-                    ));
-                Ok(())
-            })?;
+            externals
+                .lock()
+                .unwrap()
+                .push(AkExternalSourceInfo::from_id(
+                    head.reference,
+                    head.reference,
+                    AkCodecId::Vorbis,
+                ));
+        });
         // pb.finish();
     }
     let mut externals = externals.lock().unwrap();
@@ -595,8 +598,8 @@ pub fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
     info!("loaded {} banks", loaded_banks.len());
     info!("loaded {} externals", externals.len());
     Ok(BankData {
+        id: loaded_banks[0],
         externals: externals.to_vec(),
-        // loaded_banks,
         play_event_id: play_event.id,
         stop_event_id: stop_event.id,
         main_switch: main_switch.clone(),

@@ -250,6 +250,7 @@ pub fn channel_mask_to_num_channels(num_channels: u32) -> u32 {
 /// The callback will be called from the audio thread during real-time rendering and from the main thread during offline rendering.
 ///
 /// *See also*
+///
 /// > - [add_output]
 /// > - [get_output_id]
 /// > - [unregister_capture_callback]
@@ -271,15 +272,12 @@ where
 unsafe extern "C" fn call_callback_as_closure<F>(
     cb_capture_buffer: *mut bindings::root::AkAudioBuffer,
     cb_id: u64,
-    cb_cookie: *mut std::ffi::c_void,
+    cb_cookie: *mut ::std::ffi::c_void,
 ) where
     F: FnMut(AkAudioBuffer),
 {
     let callback_ptr: *mut F = cb_cookie as *mut F;
     let callback = &mut *callback_ptr;
-
-    // Info needed: is this safe if the callback panics? Should we do something with
-    // catch_unwind? Is this undefined behavior?
     callback(*cb_capture_buffer);
 }
 
@@ -289,12 +287,19 @@ unsafe extern "C" fn call_callback_as_closure<F>(
 /// > - [add_output]
 /// > - [get_output_id]
 /// > - [register_capture_callback]
-pub fn unregister_capture_callback(
-    callback: AkCaptureCallbackFunc,
+pub fn unregister_capture_callback<F>(
+    callback: F,
     id_output: AkOutputDeviceID,
-    cookie: *mut std::ffi::c_void,
-) -> Result<(), AkResult> {
-    ak_call_result!(UnregisterCaptureCallback(callback, id_output, cookie))
+) -> Result<(), AkResult>
+where
+    F: FnMut(AkAudioBuffer) + 'static,
+{
+    let data = Box::into_raw(Box::new(callback));
+    ak_call_result!(UnregisterCaptureCallback(
+        Some(call_callback_as_closure::<F>),
+        id_output,
+        data as *mut _
+    ))
 }
 
 /// Gets the compounded output ID from shareset and device id.
@@ -773,7 +778,7 @@ impl AkExternalSourceInfo {
 
     // TODO: This doesn't properly initialize a new in-memory only streamed media file. Still requires a file to be loaded for it to function.
     pub fn from_ptr(
-        data: *mut std::ffi::c_void,
+        data: *mut ::std::ffi::c_void,
         size: AkUInt32,
         external_src_cookie: AkUInt32,
         codec: super::AkCodecId,

@@ -15,7 +15,7 @@ use poll_promise::Promise;
 use rrise::sound_engine::{
     clear_banks, set_game_object_output_bus_volume, unregister_all_game_obj,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::Ordering};
 
 use crate::{config, term_sound_engine};
 
@@ -234,6 +234,10 @@ impl eframe::App for AzilisApp {
 
 impl AzilisApp {
     fn open_bank(&mut self, tag: TagHash) {
+        let loaded_bank = self.bank_list_view.player_view.bank_data.lock().unwrap().id;
+        if loaded_bank != 0 {
+            rrise::sound_engine::unload_bank_by_id(loaded_bank, std::ptr::null_mut()).unwrap();
+        }
         let new_view = PlayerView::create(tag);
         self.bank_list_view.player_view.stop();
         self.bank_list_view.player_view = new_view;
@@ -243,6 +247,7 @@ impl AzilisApp {
 
 impl Drop for AzilisApp {
     fn drop(&mut self) {
+        self.bank_list_view.player_view.stop();
         clear_banks().unwrap();
         unregister_all_game_obj().unwrap();
         term_sound_engine().unwrap();

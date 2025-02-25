@@ -9,6 +9,7 @@ pub mod communication;
 pub mod game_syncs;
 pub mod memory_mgr;
 pub mod music_engine;
+pub mod package_manager;
 pub mod query_params;
 pub mod settings;
 pub mod sound_engine;
@@ -763,4 +764,36 @@ pub enum AkCodecId {
     BankEvent = 30,
     /// Bank encoding for bus banks. These banks are contained in the /bus sub-folder.
     BankBus = 31,
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ddumbe_get_wwise_file_size_by_id(id: u32) -> usize {
+    package_manager::package_manager()
+        .get_all_by_reference(id)
+        .first()
+        .map(|(_, e)| e.file_size as usize)
+        .unwrap_or(usize::MAX)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ddumbe_read_wwise_file_by_id(
+    id: u32,
+    buffer: *mut u8,
+    size: usize,
+) -> AkResult {
+    let Some((t, _)) = package_manager::package_manager()
+        .get_all_by_reference(id)
+        .first()
+        .cloned()
+    else {
+        return AkResult::AK_FileNotFound;
+    };
+    let Ok(data) = package_manager::package_manager().read_tag(t) else {
+        return AkResult::AK_Fail;
+    };
+
+    let len = data.len();
+    let to_copy = std::cmp::min(len, size);
+    std::ptr::copy_nonoverlapping(data.as_ptr(), buffer, to_copy);
+    AkResult::AK_Success
 }

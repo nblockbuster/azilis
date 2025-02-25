@@ -2,7 +2,10 @@
  * Copyright (c) 2022 Contributors to the Rrise project
  */
 
-use crate::bindings::root::{AddBasePath, InitDefaultStreamMgr, TermDefaultStreamMgr, AK};
+use crate::bindings::root::{
+    AddBasePath, InitDefaultStreamMgr, InitTigerStreamMgr, TermDefaultStreamMgr,
+    TermTigerStreamMgr, AK,
+};
 use crate::settings::{AkDeviceSettings, AkStreamMgrSettings};
 use crate::{ak_call_result, to_os_char, AkResult};
 
@@ -26,7 +29,7 @@ pub fn init(settings: &AkStreamMgrSettings) -> Result<(), AkResult> {
     }
 }
 
-/// Initializes the default streaming manager, specifying the folder in which to find the generated soundbanks when they are loaded.
+/// Initializes the default streaming manager
 pub fn init_default_stream_mgr(
     stream_mgr_settings: &AkStreamMgrSettings,
     device_settings: &mut AkDeviceSettings,
@@ -38,6 +41,18 @@ pub fn init_default_stream_mgr(
     ak_call_result![InitDefaultStreamMgr(&device_settings)]
 }
 
+/// Initializes the tiger streaming manager
+pub fn init_tiger_stream_mgr(
+    stream_mgr_settings: &AkStreamMgrSettings,
+    device_settings: &mut AkDeviceSettings,
+) -> Result<(), AkResult> {
+    init(stream_mgr_settings)?;
+    device_settings.use_stream_cache = true;
+
+    let device_settings = device_settings.as_ak();
+    ak_call_result![InitTigerStreamMgr(&device_settings)]
+}
+
 pub fn add_base_path<T: AsRef<str>>(location: T) -> Result<(), AkResult> {
     let pin_bytes = to_os_char(&location);
     ak_call_result![AddBasePath(pin_bytes.as_ptr())]
@@ -47,6 +62,13 @@ pub fn add_base_path<T: AsRef<str>>(location: T) -> Result<(), AkResult> {
 pub fn term_default_stream_mgr() {
     unsafe {
         TermDefaultStreamMgr();
+    }
+}
+
+/// Terminates the tiger streaming manager.
+pub fn term_tiger_stream_mgr() {
+    unsafe {
+        TermTigerStreamMgr();
     }
 }
 

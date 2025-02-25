@@ -7,7 +7,7 @@ edition = "2024"
 anyhow = "1"
 clap = { version = "4.5", features = ["derive"] }
 ctrlc = "3"
-destiny-pkg = {version = "0.13", features = [] }
+destiny-pkg = {version = "0.15.1", features = ["ignore_lookup_cache"] }
 env_logger = "0.11"
 log = "0.4"
 rrise = { path = "crates/rrise" }

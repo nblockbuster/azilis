@@ -29,6 +29,10 @@ fn main() -> io::Result<()> {
     println!("cargo:rerun-if-changed=c/ak.h");
     println!("cargo:rerun-if-changed=c/utilities/default_streaming_mgr.h");
     println!("cargo:rerun-if-changed=c/utilities/default_streaming_mgr.cpp");
+    println!("cargo:rerun-if-changed=c/utilities/tiger_streaming_mgr.h");
+    println!("cargo:rerun-if-changed=c/utilities/tiger_streaming_mgr.cpp");
+    println!("cargo:rerun-if-changed=c/utilities/tiger_io_hook.h");
+    println!("cargo:rerun-if-changed=c/utilities/tiger_io_hook.cpp");
     println!("cargo:rerun-if-env-changed=WWISESDK");
     println!("cargo:rerun-if-env-changed=RRISE_RERUN_BUILD");
     // --- END RERUN CONFIG
@@ -127,6 +131,8 @@ fn main() -> io::Result<()> {
     let mut build = cc::Build::new();
     build
         .cpp(true)
+        .file(crate_dir.join("tiger_io_hook.cpp"))
+        .file(crate_dir.join("tiger_streaming_mgr.cpp"))
         .file(crate_dir.join("default_streaming_mgr.cpp"))
         .file(crate_dir.join("static_plugins.cpp"))
         .file(
@@ -192,7 +198,9 @@ fn main() -> io::Result<()> {
     // --- RUN BINDGEN
     let bindings = bindgen::Builder::default()
         .header("c/ak.h")
+        .header("c/utilities/tiger_io_hook.h")
         .header("c/utilities/default_streaming_mgr.h")
+        .header("c/utilities/tiger_streaming_mgr.h")
         .clang_arg(format!(
             "-I{}",
             wwise_sdk
@@ -249,6 +257,8 @@ fn main() -> io::Result<()> {
         .allowlist_function("SetBasePath")
         .allowlist_function("AddBasePath")
         .allowlist_function("TermDefaultStreamMgr")
+        .allowlist_function("InitTigerStreamMgr")
+        .allowlist_function("TermTigerStreamMgr")
         .blocklist_item("AK_INVALID_GAME_OBJECT")
         .blocklist_item("AK_INVALID_AUDIO_OBJECT_ID")
         .rustified_enum("AKRESULT")

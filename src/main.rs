@@ -65,24 +65,31 @@ struct Args {
 }
 
 #[cfg(not(feature = "profiler"))]
+#[cfg(not(feature = "dhat-heap"))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+// #[cfg(feature = "dhat-heap")]
+// #[global_allocator]
+// static GLOBAL: dhat::Alloc = dhat::Alloc;
 
 const AUDIO_DEVICE_SYSTEM: u32 = 3859886410;
 
 fn main() -> Result<()> {
+    // #[cfg(feature = "dhat-heap")]
+    // let _profiler = dhat::Profiler::new_heap();
+
     env_logger::Builder::from_env(
         Env::default().default_filter_or("info,wgpu_core=warn,wgpu_hal=warn"),
     )
     .init();
 
-    let should_stop = Arc::new(AtomicBool::new(false));
-
-    let sstop = should_stop.clone();
-    ctrlc::set_handler(move || {
-        sstop.store(true, Ordering::SeqCst);
-    })
-    .expect("Error setting Ctrl-C handler");
+    // let should_stop = Arc::new(AtomicBool::new(false));
+    // let sstop = should_stop.clone();
+    // ctrlc::set_handler(move || {
+    //     sstop.store(true, Ordering::SeqCst);
+    // })
+    // .expect("Error setting Ctrl-C handler");
 
     config::load();
 
@@ -108,8 +115,11 @@ fn main() -> Result<()> {
         args.version, packages_path
     );
     let ver = args.version.unwrap_or(GameVersion::Destiny2TheFinalShape);
-    let pm = PackageManager::new(packages_path, ver, None).unwrap();
+    let pm = PackageManager::new(&packages_path, ver, None).unwrap();
     initialize_package_manager(pm);
+    rrise::package_manager::initialize_package_manager(
+        PackageManager::new(packages_path, ver, None).unwrap(),
+    );
 
     init_sound_engine()?;
     if !is_initialized() {
@@ -120,67 +130,86 @@ fn main() -> Result<()> {
     add_default_listener(1)?;
     register_game_obj(100)?;
 
-    // --- OFFLINE RENDERING ---
+    let mut bank_data = Vec::new();
+    {
+        #[cfg(feature = "profiler")]
+        profiling::scope!("load init bnk");
 
-    let bnk_data = crate::gui::player::load_bank(&mut package_manager().read_tag(0x80BF8801)?)?;
+        let init_tags = package_manager().get_all_by_type(26, Some(5));
 
-    sound_engine::set_offline_rendering(true)?;
-    sound_engine::set_offline_rendering_time(0.0)?;
-    sound_engine::render_audio(false)?;
-
-    let mut cc = sound_engine::AkChannelConfig::default();
-    cc.set_standard(rrise::AK_SPEAKER_SETUP_7_1);
-    let mut out_settings = rrise::AkOutputSettings {
-        audioDeviceShareset: AUDIO_DEVICE_SYSTEM,
-        idDevice: 0,
-        ePanningRule: rrise::AkPanningRule::AkPanningRule_Speakers,
-        channelConfig: cc.as_ak(),
-    };
-
-    info!("{}", cc.dbg_chroma());
-
-    let new_device_id = sound_engine::replace_output(&mut out_settings, 0)?;
-    sound_engine::render_audio(true)?;
-    let samplerate = sound_engine::get_sample_rate();
-
-    info!("sample rate: {:#?}", samplerate);
-    let spec = hound::WavSpec {
-        channels: cc.num_channels as u16,
-        sample_rate: samplerate,
-        bits_per_sample: 32,
-        sample_format: hound::SampleFormat::Float,
-    };
-    // TODO: flac
-    let writer = Arc::new(eframe::egui::mutex::Mutex::new(
-        hound::WavWriter::create("test.wav", spec).unwrap(),
-    ));
-    sound_engine::register_capture_callback(
-        move |x| {
-            let sample_count = x.uValidFrames as u32 * x.channelConfig.uNumChannels();
-            let samples =
-                unsafe { std::slice::from_raw_parts(x.pData as *const f32, sample_count as usize) };
-            for s in samples {
-                writer.lock().write_sample(*s).unwrap();
-            }
-        },
-        new_device_id,
-    )?;
-
-    sound_engine::set_offline_rendering_time(30.0)?;
-    rrise::game_syncs::set_switch(crate::gui::player::MUSIC_GROUP_ID, 1089288480, 100)?;
-    // TODO: Add callbacks to offline rendering so you can add a stop point
-    sound_engine::PostEvent::new(100, bnk_data.play_event_id, bnk_data.externals).post()?;
-
-    loop {
-        if should_stop.load(Ordering::Relaxed) {
-            stop_all(None);
-            unregister_all_game_obj()?;
-            break;
+        {
+            let init_data = package_manager().read_tag(init_tags.first().unwrap().0)?;
+            let data_len = init_data.len() as u32;
+            bank_data.push(init_data);
+            let id = sound_engine::load_bank_memory_view(
+                bank_data[0].as_mut_ptr() as *mut std::ffi::c_void,
+                data_len,
+            )?;
         }
-        render_audio(true)?;
     }
 
-    return Ok(());
+    // --- OFFLINE RENDERING ---
+
+    // let bnk_data = crate::gui::player::load_bank(&mut package_manager().read_tag(0x80BF8801)?)?;
+
+    // sound_engine::set_offline_rendering(true)?;
+    // sound_engine::set_offline_rendering_time(0.0)?;
+    // sound_engine::render_audio(false)?;
+
+    // let mut cc = sound_engine::AkChannelConfig::default();
+    // cc.set_standard(rrise::AK_SPEAKER_SETUP_2_0);
+    // let mut out_settings = rrise::AkOutputSettings {
+    //     audioDeviceShareset: AUDIO_DEVICE_SYSTEM,
+    //     idDevice: 0,
+    //     ePanningRule: rrise::AkPanningRule::AkPanningRule_Speakers,
+    //     channelConfig: cc.as_ak(),
+    // };
+
+    // // info!("{}", cc.dbg_chroma());
+
+    // let _new_device_id = sound_engine::replace_output(&mut out_settings, 0)?;
+    // sound_engine::set_offline_rendering(false)?;
+    // sound_engine::render_audio(true)?;
+    // let samplerate = sound_engine::get_sample_rate();
+
+    // info!("sample rate: {:#?}", samplerate);
+    // let spec = hound::WavSpec {
+    //     channels: cc.num_channels as u16,
+    //     sample_rate: samplerate,
+    //     bits_per_sample: 32,
+    //     sample_format: hound::SampleFormat::Float,
+    // };
+    // // TODO: flac
+    // let writer = Arc::new(eframe::egui::mutex::Mutex::new(
+    //     hound::WavWriter::create("test.wav", spec).unwrap(),
+    // ));
+    // sound_engine::register_capture_callback(
+    //     move |x| {
+    //         let sample_count = x.uValidFrames as u32 * x.channelConfig.uNumChannels();
+    //         let samples =
+    //             unsafe { std::slice::from_raw_parts(x.pData as *const f32, sample_count as usize) };
+    //         for s in samples {
+    //             writer.lock().write_sample(*s).unwrap();
+    //         }
+    //     },
+    //     new_device_id,
+    // )?;
+
+    // sound_engine::set_offline_rendering_time(30.0)?;
+    // rrise::game_syncs::set_switch(crate::gui::player::MUSIC_GROUP_ID, 1089288480, 100)?;
+    // // TODO: Add callbacks to offline rendering so you can add a stop point
+    // sound_engine::PostEvent::new(100, bnk_data.play_event_id, bnk_data.externals).post()?;
+
+    // loop {
+    //     if should_stop.load(Ordering::Relaxed) {
+    //         stop_all(None);
+    //         unregister_all_game_obj()?;
+    //         break;
+    //     }
+    //     render_audio(true)?;
+    // }
+
+    // return Ok(());
 
     // --- OFFLINE RENDERING ---
 
@@ -204,20 +233,17 @@ fn main() -> Result<()> {
     });
     config::persist();
 
-    eframe::run_native(
+    Ok(eframe::run_native(
         "Azilis",
         native_options,
         Box::new(|cc| Ok(Box::new(AzilisApp::new(cc)))),
-    )
-    .unwrap();
+    )?)
 
-    config::persist();
+    // config::persist();
 
-    clear_banks().unwrap();
-    unregister_all_game_obj().unwrap();
-    term_sound_engine().unwrap();
-
-    Ok(())
+    // clear_banks().unwrap();
+    // unregister_all_game_obj().unwrap();
+    // term_sound_engine().unwrap();
 }
 
 fn find_d2_packages_path() -> Option<String> {
@@ -253,18 +279,28 @@ fn init_sound_engine() -> Result<(), AkResult> {
 
     memory_mgr::init(&mut AkMemSettings::default())?;
     assert!(memory_mgr::is_initialized());
-    stream_mgr::init_default_stream_mgr(
+    stream_mgr::init_tiger_stream_mgr(
         &AkStreamMgrSettings::default(),
         &mut AkDeviceSettings::default(),
     )
     .unwrap();
 
+    let mut cc = sound_engine::AkChannelConfig::default();
+    cc.set_standard(rrise::AK_SPEAKER_SETUP_2_0);
+    let settings_main_output = rrise::AkOutputSettings {
+        audioDeviceShareset: AUDIO_DEVICE_SYSTEM,
+        idDevice: 0,
+        ePanningRule: rrise::AkPanningRule::AkPanningRule_Speakers,
+        channelConfig: cc.as_ak(),
+    };
+
+    let mut init = AkInitSettings {
+        settings_main_output,
+        ..Default::default()
+    };
+
     stream_mgr::set_current_language("English(US)").unwrap();
-    sound_engine::init(
-        &mut setup_example_dll_path(),
-        &mut AkPlatformInitSettings::default(),
-    )
-    .unwrap();
+    sound_engine::init(&mut init, &mut AkPlatformInitSettings::default()).unwrap();
 
     music_engine::init(&mut settings::AkMusicSettings::default())?;
 
@@ -276,41 +312,8 @@ fn term_sound_engine() -> Result<(), AkResult> {
     profiling::scope!("term_sound_engine");
 
     sound_engine::term();
-    stream_mgr::term_default_stream_mgr();
+    stream_mgr::term_tiger_stream_mgr();
     memory_mgr::term();
 
     Ok(())
-}
-
-fn setup_example_dll_path() -> AkInitSettings {
-    let wwise_sdk = PathBuf::from(std::env::var("WWISESDK").expect("env var WWISESDK not found"));
-
-    let mut path;
-    path = wwise_sdk.join("x64_vc170");
-    #[cfg(target_os = "linux")]
-    {
-        path = wwise_sdk.join("Linux_x64");
-    }
-
-    path = if cfg!(wwdebug) {
-        path.join("Debug")
-    } else if cfg!(wwrelease) {
-        path.join("Release")
-    } else {
-        path.join("Profile")
-    };
-
-    // -- KNOWN ISSUE ON WINDOWS --
-    // If WWISESDK contains spaces, the DLLs can't be discovered.
-    // Help wanted!
-    // Anyway, if you truly wanted to deploy something based on this crate with dynamic loading of
-    // Wwise plugins, you would need to make sure to deploy any Wwise shared library (SO or DLL)
-    // along your executable. You can't expect your players to have Wwise installed!
-    // You can also just statically link everything, using this crate features. Enabling a feature
-    // then forcing a rebuild will statically link the selected plugins instead of letting Wwise
-    // look for their shared libraries at runtime.
-    // Legal: Remember that Wwise is a licensed product, and you can't distribute their code,
-    // statically linked or not, without a proper license.
-    AkInitSettings::default()
-        .with_plugin_dll_path(path.join("bin").into_os_string().into_string().unwrap())
 }
