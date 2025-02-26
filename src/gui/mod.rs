@@ -162,7 +162,7 @@ impl eframe::App for AzilisApp {
                             && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     } else {
                         submitted |= TextEdit::singleline(&mut self.tag_input)
-                            .hint_text("32")
+                            .hint_text("32-bit hex tag")
                             .desired_width(128. + 8.)
                             .ui(ui)
                             .lost_focus()
@@ -188,10 +188,12 @@ impl eframe::App for AzilisApp {
                         {
                             let hash = tag_input_trimmed.parse().unwrap_or_default();
                             TagHash(hash)
-                        } else {
+                        } else if !tag_input_trimmed.is_empty() {
                             let hash =
                                 u32::from_str_radix(tag_input_trimmed, 16).unwrap_or_default();
                             TagHash(u32::from_be(hash))
+                        } else {
+                            TagHash::NONE
                         };
 
                         self.open_bank(tag);
@@ -234,6 +236,9 @@ impl eframe::App for AzilisApp {
 
 impl AzilisApp {
     fn open_bank(&mut self, tag: TagHash) {
+        if tag.is_none() {
+            return;
+        }
         let loaded_bank = self.bank_list_view.player_view.bank_data.lock().unwrap().id;
         if loaded_bank != 0 {
             let mut bnk_ptr = self

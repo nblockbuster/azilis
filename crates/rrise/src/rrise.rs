@@ -129,6 +129,7 @@ pub use bindings::root::AkTransform;
 pub use bindings::root::AkVector;
 #[doc(inline)]
 pub use bindings::root::AKRESULT as AkResult;
+use log::debug;
 
 pub use crate::bindings::root::AkMIDIEvent_tCc;
 pub use crate::bindings::root::AkMIDIEvent_tChanAftertouch;
@@ -806,8 +807,7 @@ pub unsafe extern "C" fn monitoring_callback(
     in_playingID: bindings::root::AkPlayingID,
     in_gameObjID: bindings::root::AkGameObjectID,
 ) {
-    println!(
-        "Monitoring callback: code={:?} message='{}' level={:?} playing={:?} obj={:?}",
+    debug!(target: "Monitoring callback", "code={:?} message='{}' level={:?} playing={:?} obj={:?}",
         in_eErrorCode,
         widestring::ucstr::U16CStr::from_ptr_str(in_pszError).display(),
         in_eErrorLevel,

@@ -197,8 +197,6 @@ impl PlayerView {
         loop {
             if should_stop_audio.load(Ordering::Relaxed) {
                 stop_all(Some(100));
-                // unregister_all_game_obj().unwrap();
-                // clear_banks().unwrap();
                 break;
             }
 
@@ -360,6 +358,11 @@ impl View for PlayerView {
                 .show(ui, |ui| {
                     ui.separator();
 
+                    ui.label(
+                        RichText::new(format!("Switch State ID: {}", self.current_switch_id.load(Ordering::Relaxed)))
+                            .font(FontId::proportional(style::TEXT_BODY_SIZE)),
+                    );
+
                     if let Some(playlist_callback) =
                         self.callback_infos.read().get(&CallbackType::MusicPlaylist)
                         && let AkCallbackInfo::MusicPlaylist {
@@ -369,7 +372,7 @@ impl View for PlayerView {
                             ..
                         } = playlist_callback
                     {
-                        {
+                        {   
                             ui.label(
                                 RichText::new(format!("Playlist ID: {}", playlist_id,))
                                     .font(FontId::proportional(style::TEXT_BODY_SIZE)),

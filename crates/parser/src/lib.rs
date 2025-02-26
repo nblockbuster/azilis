@@ -39,6 +39,8 @@ pub enum ChunkName {
     STID = fourcc!("STID"),
     PLAT = fourcc!("PLAT"),
     DIDX = fourcc!("DIDX"),
+    DATA = fourcc!("DATA"),
+    ENVS = fourcc!("ENVS"),
 }
 
 #[derive(BinRead, Debug, Clone, Copy)]
@@ -68,6 +70,10 @@ pub enum SoundbankChunkTypes {
     Platform,
     #[br(pre_assert(ty == ChunkName::DIDX))]
     MediaIndex,
+    #[br(pre_assert(ty == ChunkName::DATA))]
+    Data,
+    #[br(pre_assert(ty == ChunkName::ENVS))]
+    EnvironmentSettings
 }
 
 #[derive(BinRead, Debug, Clone)]
