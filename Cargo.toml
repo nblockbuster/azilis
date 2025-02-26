@@ -7,7 +7,7 @@ edition = "2024"
 anyhow = "1"
 clap = { version = "4.5", features = ["derive"] }
 ctrlc = "3"
-destiny-pkg = {version = "0.15.1", features = ["ignore_lookup_cache"] }
+destiny-pkg = "0.15.1"
 env_logger = "0.11"
 log = "0.4"
 rrise = { path = "crates/rrise" }
@@ -17,7 +17,6 @@ eframe = { version = "0.31", default-features = false, features = [
     "persistence",
     "wgpu",
 ] }
-binrw = "0.13"
 chroma-dbg = "0.1"
 itertools = "0.14"
 rayon = "1.10"
@@ -30,11 +29,9 @@ egui-notify = "0.19"
 dhat = "0.3"
 mimalloc = "0.1"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 serde_yaml = "0.9"
 directories = "6"
-dasp_signal = "0.11.0"
-hound = "3.5.1"
+hound = "3.5"
 
 [features]
 profiler = ["profiling/profile-with-tracy", "parser/profiler"]
@@ -45,3 +42,6 @@ dhat-ad-hoc = []
 
 [profile.dev.package.destiny-pkg]
 opt-level = 3
+
+[profile.release.package.rrise]
+opt-level = 0

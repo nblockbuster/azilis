@@ -19,7 +19,7 @@ use rrise::sound_engine::{clear_banks, load_bank_memory_view, stop_all, unregist
 use rrise::{AkCallbackInfo, AkCallbackType};
 use rrise::{
     AkCodecId, game_syncs,
-    sound_engine::{AkExternalSourceInfo, PostEvent, load_bank_memory_copy, render_audio},
+    sound_engine::{PostEvent, load_bank_memory_copy, render_audio},
     stream_mgr,
 };
 use std::sync::atomic::AtomicBool;
@@ -39,7 +39,7 @@ use super::{TOASTS, View, ViewAction, color, icons::*, style};
 
 pub const MUSIC_GROUP_ID: u32 = 1246133352;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct BankData {
     pub id: u32,
     // loaded_banks: Vec<u32>,
@@ -47,7 +47,8 @@ pub struct BankData {
     pub stop_event_id: u32,
     pub main_switch: MusicSwitchContainer,
     // tracks: Vec<MusicTrack>,
-    pub externals: Vec<AkExternalSourceInfo>,
+    // pub externals: Vec<AkExternalSourceInfo>,
+    pub bank_data: Vec<Vec<u8>>,
 }
 
 #[derive(Copy, Clone)]
@@ -173,37 +174,44 @@ impl PlayerView {
                         .error(format!("{:?}", e.root_cause()));
                     return BankData::default();
                 }
-
-                bnk.unwrap()
+                let bnk = bnk.unwrap();
+                // info!("{}", bnk.externals.dbg_chroma());
+                bnk
             })),
             bank_data: Default::default(),
             current_switch_id,
             stop_audio,
-            audio_thread: Some(std::thread::spawn(move || {
-                #[cfg(feature = "profiler")]
-                profiling::register_thread!("rust_audio_thread");
-                let mut last_switch: u32 = 0;
-                loop {
-                    // #[cfg(feature = "profiler")]
-                    // profiling::scope!("render_audio");
-                    if should_stop_audio.load(Ordering::Relaxed) {
-                        stop_all(None);
-                        unregister_all_game_obj().unwrap();
-                        clear_banks().unwrap();
-                        break;
-                    }
-
-                    let switch = switch_id.load(Ordering::Relaxed);
-                    if switch != last_switch {
-                        game_syncs::set_switch(MUSIC_GROUP_ID, switch, 100).unwrap();
-                    }
-                    last_switch = switch;
-                    render_audio(true).unwrap();
-                }
+            audio_thread: Some(std::thread::spawn(|| {
+                Self::audio_thread(should_stop_audio, switch_id)
             })),
             switch_dropdown: String::new(),
             apply_dropdown: false,
             callback_infos: Default::default(),
+        }
+    }
+
+    fn audio_thread(should_stop_audio: Arc<AtomicBool>, switch_id: Arc<AtomicU32>) {
+        #[cfg(feature = "profiler")]
+        profiling::register_thread!("rust_audio_thread");
+        let mut last_switch: u32 = 0;
+        loop {
+            if should_stop_audio.load(Ordering::Relaxed) {
+                stop_all(None);
+                unregister_all_game_obj().unwrap();
+                clear_banks().unwrap();
+                break;
+            }
+
+            let switch = switch_id.load(Ordering::Relaxed);
+            if switch != last_switch {
+                #[cfg(feature = "profiler")]
+                profiling::scope!("set_switch");
+                game_syncs::set_switch(MUSIC_GROUP_ID, switch, 100).unwrap();
+            }
+            last_switch = switch;
+            // #[cfg(feature = "profiler")]
+            // profiling::scope!("render_audio");
+            render_audio(true).unwrap();
         }
     }
 }
@@ -296,7 +304,7 @@ impl View for PlayerView {
         }
         let infos = self.callback_infos.clone();
         if change_event {
-            if let Ok(playing_id) = PostEvent::new(100, id, data.externals.to_vec())
+            if let Ok(playing_id) = PostEvent::new(100, id)
                 .add_flags(AkCallbackType::AK_MusicPlayStarted)
                 .add_flags(AkCallbackType::AK_MusicPlaylistSelect)
                 .add_flags(AkCallbackType::AK_MusicSyncAll)
@@ -462,7 +470,7 @@ pub fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
         let data_len = data.len() as u32;
         bank_data.push(data.to_vec());
         let id =
-            load_bank_memory_copy(bank_data[0].as_mut_ptr() as *mut std::ffi::c_void, data_len)?;
+            load_bank_memory_view(bank_data[0].as_mut_ptr() as *mut std::ffi::c_void, data_len)?;
         loaded_banks.push(id);
 
         parser::parse(data)?
@@ -535,74 +543,74 @@ pub fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
 
     // *BANK_PROGRESS.write() = BankStatus::Externals { current_file: (), total_files: () };
 
-    let externals = Arc::new(Mutex::new(Vec::new()));
-    {
-        #[cfg(feature = "profiler")]
-        profiling::scope!("load externals");
+    // let externals = Arc::new(Mutex::new(Vec::new()));
+    // {
+    //     #[cfg(feature = "profiler")]
+    //     profiling::scope!("load externals");
 
-        // TODO: speed
-        tracks.clone().par_iter_mut().for_each(|x| {
-            {
-                let mut p = BANK_PROGRESS.write();
-                let current_file = if let BankStatus::Externals { current_file, .. } = *p {
-                    current_file
-                } else {
-                    0
-                };
+    //     // TODO: speed
+    //     tracks.clone().par_iter_mut().for_each(|x| {
+    //         {
+    //             let mut p = BANK_PROGRESS.write();
+    //             let current_file = if let BankStatus::Externals { current_file, .. } = *p {
+    //                 current_file
+    //             } else {
+    //                 0
+    //             };
 
-                *p = BankStatus::Externals {
-                    current_file: current_file + 1,
-                    total_files: tracks.len(),
-                };
-            }
-            if x.sounds.is_empty() {
-                return;
-                // return Err(anyhow::anyhow!("No sounds found"));
-            }
-            let th = package_manager().get_all_by_reference(x.sounds[0].audio_id)[0].0;
-            let head = package_manager().get_entry(th).unwrap();
-            // let path = tmpdir.join(format!("{}.wem", head.reference));
-            // if path.exists() {
-            //     externals
-            //         .lock()
-            //         .unwrap()
-            //         .push(AkExternalSourceInfo::from_id(
-            //             head.reference,
-            //             head.reference,
-            //             AkCodecId::Vorbis,
-            //         ));
+    //             *p = BankStatus::Externals {
+    //                 current_file: current_file + 1,
+    //                 total_files: tracks.len(),
+    //             };
+    //         }
+    //         if x.sounds.is_empty() {
+    //             return;
+    //             // return Err(anyhow::anyhow!("No sounds found"));
+    //         }
+    //         let th = package_manager().get_all_by_reference(x.sounds[0].audio_id)[0].0;
+    //         let head = package_manager().get_entry(th).unwrap();
+    //         // let path = tmpdir.join(format!("{}.wem", head.reference));
+    //         // if path.exists() {
+    //         //     externals
+    //         //         .lock()
+    //         //         .unwrap()
+    //         //         .push(AkExternalSourceInfo::from_id(
+    //         //             head.reference,
+    //         //             head.reference,
+    //         //             AkCodecId::Vorbis,
+    //         //         ));
 
-            //     return Ok(());
-            // }
-            // trace!("Loading {:?}.wem", head.reference);
-            // let data = package_manager().read_tag(th)?;
-            // trace!("Writing {:?}.wem", head.reference);
+    //         //     return Ok(());
+    //         // }
+    //         // trace!("Loading {:?}.wem", head.reference);
+    //         // let data = package_manager().read_tag(th)?;
+    //         // trace!("Writing {:?}.wem", head.reference);
 
-            // let mut file = std::fs::File::create(&path).unwrap();
-            // file.write_all(&data).unwrap();
+    //         // let mut file = std::fs::File::create(&path).unwrap();
+    //         // file.write_all(&data).unwrap();
 
-            externals
-                .lock()
-                .unwrap()
-                .push(AkExternalSourceInfo::from_id(
-                    head.reference,
-                    head.reference,
-                    AkCodecId::Vorbis,
-                ));
-        });
-        // pb.finish();
-    }
-    let mut externals = externals.lock().unwrap();
-    externals.dedup_by(|a, b| a.external_src_cookie == b.external_src_cookie);
+    //         externals
+    //             .lock()
+    //             .unwrap()
+    //             .push(AkExternalSourceInfo::from_id(
+    //                 head.reference,
+    //                 head.reference,
+    //                 AkCodecId::Vorbis,
+    //             ));
+    //     });
+    //     // pb.finish();
+    // }
+    // let mut externals = externals.lock().unwrap();
+    // externals.dedup_by(|a, b| a.external_src_cookie == b.external_src_cookie);
 
     info!("loaded {} banks", loaded_banks.len());
-    info!("loaded {} externals", externals.len());
+    // info!("loaded {} externals", externals.len());
     Ok(BankData {
         id: loaded_banks[0],
-        externals: externals.to_vec(),
+        // externals: externals.to_vec(),
         play_event_id: play_event.id,
         stop_event_id: stop_event.id,
         main_switch: main_switch.clone(),
-        // tracks,
+        bank_data,
     })
 }

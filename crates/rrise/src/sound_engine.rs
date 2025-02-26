@@ -764,77 +764,6 @@ pub fn get_id_from_string<T: AsRef<str>>(string: T) -> AkUInt32 {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct AkExternalSourceInfo {
-    pub external_src_cookie: AkUInt32,
-    pub codec: super::AkCodecId,
-    // pub file_path: *mut u16,
-    // pub in_memory: *mut std::ffi::c_void, //&'a mut [u8],
-    pub memory_size: AkUInt32,
-    pub file_id: AkFileID,
-}
-
-impl AkExternalSourceInfo {
-    // AkExternalSourceInfo (void *in_pInMemory, AkUInt32 in_uiMemorySize, AkUInt32 in_iExternalSrcCookie, AkCodecID in_idCodec)
-
-    // TODO: This doesn't properly initialize a new in-memory only streamed media file. Still requires a file to be loaded for it to function.
-    pub fn from_ptr(
-        data: *mut ::std::ffi::c_void,
-        size: AkUInt32,
-        external_src_cookie: AkUInt32,
-        codec: super::AkCodecId,
-    ) -> Self {
-        Self {
-            // in_memory: data,
-            memory_size: size,
-            external_src_cookie,
-            codec,
-            // file_path: ::std::ptr::null_mut(),
-            file_id: 0,
-        }
-    }
-
-    // AkExternalSourceInfo (AkOSChar *in_pszFileName, AkUInt32 in_iExternalSrcCookie, AkCodecID in_idCodec)
-    pub fn from_path<T: AsRef<str>>(
-        file_path: T,
-        external_src_cookie: AkUInt32,
-        codec: super::AkCodecId,
-    ) -> Self {
-        let mut os_str = to_os_char(file_path);
-        Self {
-            // file_path: os_str.as_mut_ptr() as *mut u16,
-            external_src_cookie,
-            codec,
-            // in_memory: ::std::ptr::null_mut(),
-            memory_size: 0,
-            file_id: 0,
-        }
-    }
-
-    // AkExternalSourceInfo (AkFileID in_idFile, AkUInt32 in_iExternalSrcCookie, AkCodecID in_idCodec)
-    pub fn from_id(id: AkFileID, external_src_cookie: AkUInt32, codec: super::AkCodecId) -> Self {
-        Self {
-            file_id: id,
-            external_src_cookie,
-            codec,
-            // file_path: ::std::ptr::null_mut(),
-            // in_memory: ::std::ptr::null_mut(),
-            memory_size: 0,
-        }
-    }
-
-    pub(crate) fn as_ak(&mut self) -> crate::bindings::root::AkExternalSourceInfo {
-        crate::bindings::root::AkExternalSourceInfo {
-            iExternalSrcCookie: self.external_src_cookie,
-            idCodec: self.codec as u32,
-            szFile: ::std::ptr::null_mut() as *mut u16,
-            pInMemory: ::std::ptr::null_mut(),
-            uiMemorySize: self.memory_size,
-            idFile: self.file_id,
-        }
-    }
-}
-
-#[derive(Debug)]
 /// Helper to post events to the sound engine.
 ///
 /// Use [PostEvent::post] to post your event to the sound engine.
@@ -859,22 +788,18 @@ pub struct PostEvent<'a> {
     game_obj_id: AkGameObjectID,
     event_id: AkID<'a>,
     flags: AkCallbackType,
-    external_sources: Vec<AkExternalSourceInfo>,
+    // external_sources: Vec<AkExternalSourceInfo>,
     playing_id: AkPlayingID,
 }
 
 impl<'a> PostEvent<'a> {
     /// Select an event by name or by ID, to play on a given game object.
-    pub fn new<T: Into<AkID<'a>>>(
-        game_obj_id: AkGameObjectID,
-        event_id: T,
-        external_sources: Vec<AkExternalSourceInfo>,
-    ) -> PostEvent<'a> {
+    pub fn new<T: Into<AkID<'a>>>(game_obj_id: AkGameObjectID, event_id: T) -> PostEvent<'a> {
         PostEvent {
             game_obj_id,
             event_id: event_id.into(),
             flags: AkCallbackType(0),
-            external_sources: external_sources,
+            // external_sources: ...,
             playing_id: AK_INVALID_PLAYING_ID,
         }
     }
@@ -904,13 +829,7 @@ impl<'a> PostEvent<'a> {
     }
 
     /// Posts the event to the sound engine.
-    pub fn post(&mut self) -> Result<AkPlayingID, AkResult> {
-        let mut extsrc = self
-            .external_sources
-            .iter_mut()
-            .map(|x: &mut AkExternalSourceInfo| x.as_ak())
-            .collect::<Vec<crate::bindings::root::AkExternalSourceInfo>>();
-
+    pub fn post(&self) -> Result<AkPlayingID, AkResult> {
         if let AkID::Name(name) = self.event_id {
             let ak_playing_id = unsafe {
                 with_cstring![name => cname {
@@ -920,8 +839,8 @@ impl<'a> PostEvent<'a> {
                         self.flags.0 as u32,
                         None,
                         ::std::ptr::null_mut(),
-                        self.external_sources.len() as u32,
-                        extsrc.as_mut_ptr(),
+                        0,                      // TODO
+                        ::std::ptr::null_mut(), // TODO
                         self.playing_id,
                     )
                 }]
@@ -939,8 +858,8 @@ impl<'a> PostEvent<'a> {
                     self.flags.0 as u32,
                     None,
                     ::std::ptr::null_mut(),
-                    self.external_sources.len() as u32,
-                    extsrc.as_mut_ptr(),
+                    0,                      // TODO
+                    ::std::ptr::null_mut(), // TODO
                     self.playing_id,
                 )
             };
@@ -965,14 +884,10 @@ impl<'a> PostEvent<'a> {
     ///
     /// This also means the closure or function must not be long to return, or audio might sutter as
     /// it prevents the audio thread from processing buffers.
-    pub fn post_with_callback<F>(&mut self, callback: F) -> Result<AkPlayingID, AkResult>
+    pub fn post_with_callback<F>(&self, callback: F) -> Result<AkPlayingID, AkResult>
     where
         F: FnMut(crate::AkCallbackInfo) + 'static,
     {
-        let mut extsrc = Vec::new(); // = self.external_sources.iter().for_each(|x| x = x.as_ak());
-        for s in self.external_sources.iter_mut() {
-            extsrc.push(s.as_ak());
-        }
         // see http://blog.sagetheprogrammer.com/neat-rust-tricks-passing-rust-closures-to-c
         let data = Box::into_raw(Box::new(callback));
 
@@ -985,8 +900,8 @@ impl<'a> PostEvent<'a> {
                         (self.flags | AkCallbackType::AK_EndOfEvent).0 as u32,
                         Some(Self::call_callback_as_closure::<F>),
                         data as *mut _,
-                        self.external_sources.len() as u32,
-                        extsrc.as_mut_ptr(),
+                        0,                      // TODO
+                        ::std::ptr::null_mut(), // TODO
                         self.playing_id,
                     )
                 }]
@@ -1004,8 +919,8 @@ impl<'a> PostEvent<'a> {
                     (self.flags | AkCallbackType::AK_EndOfEvent).0 as u32,
                     Some(Self::call_callback_as_closure::<F>),
                     data as *mut _,
-                    self.external_sources.len() as u32,
-                    extsrc.as_mut_ptr(),
+                    0,                      // TODO
+                    ::std::ptr::null_mut(), // TODO
                     self.playing_id,
                 )
             };

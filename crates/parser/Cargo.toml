@@ -6,9 +6,7 @@ edition = "2024"
 [dependencies]
 binrw = "0.14"
 anyhow = "1"
-chroma-dbg = "0.1"
 modular-bitfield = "0.11.2"
-itertools = "0.14"
 rayon = "1"
 profiling = "1"
 

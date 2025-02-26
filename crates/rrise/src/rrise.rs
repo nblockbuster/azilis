@@ -797,3 +797,35 @@ pub unsafe extern "C" fn ddumbe_read_wwise_file_by_id(
     std::ptr::copy_nonoverlapping(data.as_ptr(), buffer, to_copy);
     AkResult::AK_Success
 }
+
+#[allow(non_snake_case)]
+pub unsafe extern "C" fn monitoring_callback(
+    in_eErrorCode: bindings::root::AK::Monitor::ErrorCode,
+    in_pszError: *const bindings::root::AkOSChar,
+    in_eErrorLevel: bindings::root::AK::Monitor::ErrorLevel,
+    in_playingID: bindings::root::AkPlayingID,
+    in_gameObjID: bindings::root::AkGameObjectID,
+) {
+    println!(
+        "Monitoring callback: code={:?} message='{}' level={:?} playing={:?} obj={:?}",
+        in_eErrorCode,
+        widestring::ucstr::U16CStr::from_ptr_str(in_pszError).display(),
+        in_eErrorLevel,
+        in_playingID,
+        in_gameObjID
+    );
+}
+
+pub mod monitor {
+    use crate::{
+        bindings::root::AK::{self, Monitor::SetLocalOutput},
+        AkResult, AkUInt32,
+    };
+
+    pub fn set_local_output(
+        error_level: AkUInt32,
+        monitor_func: AK::Monitor::LocalOutputFunc,
+    ) -> Result<(), crate::AkResult> {
+        ak_call_result![SetLocalOutput(error_level, monitor_func)]
+    }
+}
