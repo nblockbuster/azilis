@@ -196,9 +196,9 @@ impl PlayerView {
         let mut last_switch: u32 = 0;
         loop {
             if should_stop_audio.load(Ordering::Relaxed) {
-                stop_all(None);
-                unregister_all_game_obj().unwrap();
-                clear_banks().unwrap();
+                stop_all(Some(100));
+                // unregister_all_game_obj().unwrap();
+                // clear_banks().unwrap();
                 break;
             }
 
@@ -469,8 +469,7 @@ pub fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
         profiling::scope!("soundbank parse");
         let data_len = data.len() as u32;
         bank_data.push(data.to_vec());
-        let id =
-            load_bank_memory_view(bank_data[0].as_mut_ptr() as *mut std::ffi::c_void, data_len)?;
+        let id = load_bank_memory_view(bank_data[0].as_mut_ptr() as *mut _, data_len)?;
         loaded_banks.push(id);
 
         parser::parse(data)?

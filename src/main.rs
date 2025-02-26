@@ -281,6 +281,8 @@ fn init_sound_engine() -> Result<(), AkResult> {
     #[cfg(feature = "profiler")]
     profiling::scope!("init_sound_engine");
 
+    rrise::monitor::set_local_output(3, Some(rrise::monitoring_callback))?;
+
     memory_mgr::init(&mut AkMemSettings::default())?;
     assert!(memory_mgr::is_initialized());
     stream_mgr::init_tiger_stream_mgr(

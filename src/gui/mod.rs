@@ -236,7 +236,15 @@ impl AzilisApp {
     fn open_bank(&mut self, tag: TagHash) {
         let loaded_bank = self.bank_list_view.player_view.bank_data.lock().unwrap().id;
         if loaded_bank != 0 {
-            rrise::sound_engine::unload_bank_by_id(loaded_bank, std::ptr::null_mut()).unwrap();
+            let mut bnk_ptr = self
+                .bank_list_view
+                .player_view
+                .bank_data
+                .lock()
+                .unwrap()
+                .bank_data[0]
+                .as_mut_ptr() as *mut _;
+            rrise::sound_engine::unload_bank_by_id(loaded_bank, bnk_ptr).unwrap();
         }
         let new_view = PlayerView::create(tag);
         self.bank_list_view.player_view.stop();
