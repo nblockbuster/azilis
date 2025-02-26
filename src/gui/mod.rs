@@ -162,7 +162,7 @@ impl eframe::App for AzilisApp {
                             && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     } else {
                         submitted |= TextEdit::singleline(&mut self.tag_input)
-                            .hint_text("32-bit hex tag / Bank ID")
+                            .hint_text("32-bit tag/Bank ID")
                             .desired_width(128. + 8.)
                             .ui(ui)
                             .lost_focus()
