@@ -216,10 +216,10 @@ impl View for BankListView {
         egui::CentralPanel::default().show_inside(ui, |ui| {
             self.player_view.view(ctx, ui);
             ui.label(
-                RichText::new("Hierarchy view goes here :)")
+                RichText::new("Hierarchy view goes here")
                     .font(egui::FontId::proportional(20.0))
                     .strong()
-                    .color(super::color::MAROON),
+                    .color(super::color::RED),
             )
         });
 

@@ -220,6 +220,7 @@ impl eframe::App for AzilisApp {
                 let action = match self.open_panel {
                     // Panel::Player => self.player_view.view(ctx, ui),
                     Panel::BankList => self.bank_list_view.view(ctx, ui),
+                    // TODO: Standalone Hierachy View
                     _ => None,
                 };
 
@@ -241,7 +242,7 @@ impl AzilisApp {
         }
         let loaded_bank = self.bank_list_view.player_view.bank_data.lock().unwrap().id;
         if loaded_bank != 0 {
-            let mut bnk_ptr = self
+            let bnk_ptr = self
                 .bank_list_view
                 .player_view
                 .bank_data

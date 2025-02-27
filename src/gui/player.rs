@@ -1,11 +1,12 @@
 use chroma_dbg::ChromaDebug;
 use destiny_pkg::TagHash;
 use eframe::egui::ahash::HashMap;
-use eframe::egui::{Color32, Context, FontId, RichText, Ui, SidePanel, TextWrapMode, ScrollArea};
+use eframe::egui::{Color32, Context, FontId, RichText, ScrollArea, SidePanel, TextWrapMode, Ui};
 use eframe::epaint::mutex::RwLock;
 use egui_dropdown::DropDownBox;
 use itertools::Itertools;
 use log::{info, trace};
+use parser::hierarchy::{HierarchyChunk, HierarchyObject};
 use parser::{
     SoundbankChunkTypes,
     hierarchy::{
@@ -43,12 +44,13 @@ pub const MUSIC_GROUP_ID: u32 = 1246133352;
 pub struct BankData {
     pub id: u32,
     // loaded_banks: Vec<u32>,
-    pub play_event_id: u32,
-    pub stop_event_id: u32,
+    pub play_event_ids: Vec<u32>,
+    pub stop_event_ids: Vec<u32>,
     pub main_switch: MusicSwitchContainer,
     // tracks: Vec<MusicTrack>,
     // pub externals: Vec<AkExternalSourceInfo>,
     pub bank_data: Vec<Vec<u8>>,
+    pub hierarchy: HierarchyChunk,
 }
 
 #[derive(Copy, Clone)]
@@ -117,6 +119,7 @@ pub struct PlayerView {
     callback_infos: Arc<RwLock<HashMap<CallbackType, AkCallbackInfo>>>,
     // pub loaded_bank: u32,
     // pub old_bank: u32,
+    switch_group: Arc<AtomicU32>,
 }
 
 impl PlayerView {
@@ -144,6 +147,7 @@ impl PlayerView {
             switch_filter: String::new(),
             apply_switch: false,
             callback_infos: Default::default(),
+            switch_group: Arc::new(MUSIC_GROUP_ID.into()),
         }
     }
 
@@ -163,6 +167,9 @@ impl PlayerView {
         let stop_audio = Arc::new(AtomicBool::new(false));
         let should_stop_audio = stop_audio.clone();
 
+        let switch_group = Arc::new(AtomicU32::new(MUSIC_GROUP_ID));
+        let group = switch_group.clone();
+
         Self {
             tag,
             tag_data: tag_data.clone(),
@@ -176,24 +183,29 @@ impl PlayerView {
                         .error(format!("{:?}", e.root_cause()));
                     return BankData::default();
                 }
-                let bnk = bnk.unwrap();
+                // let bnk = bnk.unwrap();
                 // info!("{}", bnk.externals.dbg_chroma());
-                bnk
+                bnk.unwrap()
             })),
             bank_data: Default::default(),
             current_switch_id,
             stop_audio,
             audio_thread: Some(std::thread::spawn(|| {
-                Self::audio_thread(should_stop_audio, switch_id)
+                Self::audio_thread(should_stop_audio, switch_id, group);
             })),
             switch: String::new(),
             switch_filter: String::new(),
             apply_switch: false,
             callback_infos: Default::default(),
+            switch_group,
         }
     }
 
-    fn audio_thread(should_stop_audio: Arc<AtomicBool>, switch_id: Arc<AtomicU32>) {
+    fn audio_thread(
+        should_stop_audio: Arc<AtomicBool>,
+        switch_id: Arc<AtomicU32>,
+        switch_group: Arc<AtomicU32>,
+    ) {
         #[cfg(feature = "profiler")]
         profiling::register_thread!("rust_audio_thread");
         let mut last_switch: u32 = 0;
@@ -203,11 +215,13 @@ impl PlayerView {
                 break;
             }
 
+            // TODO: switch audio targets can be switches, which need more switches to switch to, with different switch groups
             let switch = switch_id.load(Ordering::Relaxed);
             if switch != last_switch {
                 #[cfg(feature = "profiler")]
                 profiling::scope!("set_switch");
-                game_syncs::set_switch(MUSIC_GROUP_ID, switch, 100).unwrap();
+                let switch_group = switch_group.load(Ordering::Relaxed);
+                game_syncs::set_switch(switch_group, switch, 100).unwrap();
             }
             last_switch = switch;
             // #[cfg(feature = "profiler")]
@@ -255,47 +269,46 @@ impl View for PlayerView {
                 if self.tag.is_some() && ui.label(self.tag.to_string()).secondary_clicked() {
                     ctx.copy_text(self.tag.to_string());
                 }
-                // TODO: Up/Down arrows
-                // ui.add(
-                //     DropDownBox::from_iter(
-                //         data.main_switch.paths.children.iter().map(|x| {
-                //             if let AudioPathElement::MusicEndpoint(m) = x {
-                //                 return format!("{}", m.from_id);
-                //             }
-                //             String::new()
-                //         }),
-                //         "Switch IDs",
-                //         &mut self.switch_dropdown,
-                //         |ui, text| ui.selectable_label(false, text),
-                //     )
-                //     .max_height(ctx.available_rect().height() * 0.5)
-                //     .filter_by_input(false),
-                // );
-                
-
-                // if ui.button(format!("{}", ICON_CHECK)).clicked() {
-                //     // self.switch_dropdown = cur_dropdown.clone();
-                //     self.apply_switch = true;
-                // };
-
                 ui.separator();
 
-                id = if ui.button(format!("{} Play", ICON_PLAY)).clicked() {
-                    change_event = true;
-                    data.play_event_id
-                } else if ui.button(format!("{} Stop", ICON_STOP)).clicked() {
-                    change_event = true;
-                    data.stop_event_id
-                } else {
-                    change_event = false;
-                    0
-                };
+                // id = if ui.button(format!("{} Play", ICON_PLAY)).clicked() {
+                //     change_event = true;
+                //     data.play_event_ids
+                // } else if ui.button(format!("{} Stop", ICON_STOP)).clicked() {
+                //     change_event = true;
+                //     data.stop_event_ids
+                // } else {
+                //     change_event = false;
+                //     0
+                // };
+                for (p, s) in data.play_event_ids.iter().zip(&data.stop_event_ids) {
+                    id = if ui
+                        .button(format!("{} Play event {}", ICON_PLAY, p))
+                        .clicked()
+                    {
+                        change_event = true;
+                        *p
+                    } else if ui
+                        .button(format!("{} Stop event {}", ICON_STOP, s))
+                        .clicked()
+                    {
+                        change_event = true;
+                        *s
+                    } else {
+                        change_event = false;
+                        0
+                    };
+                }
             })
             .response;
 
         if self.apply_switch {
             self.apply_switch = false;
-            info!("Setting switch to {}", self.switch);
+            info!(
+                "Setting switch {} to {}",
+                self.switch_group.load(Ordering::Relaxed),
+                self.switch
+            );
             let val = self.switch.parse::<u32>();
             if val.is_err() {
                 TOASTS.lock().unwrap().error("Could not parse switch ID");
@@ -355,7 +368,7 @@ impl View for PlayerView {
 
         if !self.callback_infos.read().is_empty() {
             eframe::egui::SidePanel::left("player_info")
-                .min_width(bar_resp.rect.width() * 1.5)
+                .min_width(bar_resp.rect.width())
                 .resizable(true)
                 .show_inside(ui, |ui| {
                     eframe::egui::ScrollArea::vertical()
@@ -365,10 +378,7 @@ impl View for PlayerView {
                         .show(ui, |ui| {
                             ui.separator();
 
-                            ui.label(
-                                RichText::new(format!("Switch State ID: {}", self.current_switch_id.load(Ordering::Relaxed)))
-                                    
-                            );
+                            ui.label(RichText::new(format!("Switch State ID: {}", self.current_switch_id.load(Ordering::Relaxed))));
 
                             if let Some(playlist_callback) =
                                 self.callback_infos.read().get(&CallbackType::MusicPlaylist)
@@ -379,20 +389,9 @@ impl View for PlayerView {
                                     ..
                                 } = playlist_callback
                             {
-                                {   
-                                    ui.label(
-                                        RichText::new(format!("Playlist ID: {}", playlist_id,))
-                                            
-                                    );
-                                    ui.label(
-                                        RichText::new(format!("Playlist Items: {}", num_playlist_items))
-                                            
-                                    );
-                                    ui.label(
-                                        RichText::new(format!("Selected Item: {}", playlist_selection))
-                                            
-                                    );
-                                }
+                                ui.label(RichText::new(format!("Playlist ID: {}", playlist_id,)));
+                                ui.label(RichText::new(format!("Playlist Items: {}", num_playlist_items)));
+                                ui.label(RichText::new(format!("Selected Item: {}", playlist_selection)));
                             }
 
                             ui.separator();
@@ -438,6 +437,7 @@ impl View for PlayerView {
             });
         }
 
+        // TODO: do not deselect parent switch when child is selected -- use hashmap group:id?
         eframe::egui::SidePanel::right("switch_list_panel")
             .min_width(120.0)
             .resizable(true)
@@ -447,17 +447,57 @@ impl View for PlayerView {
                     ui.text_edit_singleline(&mut self.switch_filter);
                 });
 
+                let mut children = Vec::new();
                 eframe::egui::ScrollArea::vertical()
                     .max_height(ctx.available_rect().height() * 0.9)
                     .auto_shrink([false, false])
                     .id_salt("switch_list")
                     .show(ui, |ui| {
-                            for switch in data.main_switch.paths.children.iter().map(|x| {
-                                    if let AudioPathElement::MusicEndpoint(m) = x {
-                                        return format!("{}", m.from_id);
-                                    }
-                                    String::new()
-                                }) {
+                        for switch in data.main_switch.paths.children.iter().map(|x| {
+                            if let AudioPathElement::MusicEndpoint(m) = x {
+                                children.push(m.audio_id);
+                                return format!("{}", m.from_id);
+                            }
+                            String::new()
+                        }) {
+                            if !self.switch_filter.is_empty()
+                                && !switch
+                                    .to_lowercase()
+                                    .contains(&self.switch_filter.to_lowercase())
+                            {
+                                continue;
+                            }
+                            if ui
+                                .selectable_value(&mut self.switch, switch.clone(), switch)
+                                .clicked()
+                            {
+                                self.apply_switch = true;
+                                self.switch_group.store(
+                                    *data.main_switch.group_ids.first().unwrap(),
+                                    Ordering::Relaxed,
+                                );
+                            }
+                        }
+                    });
+                eframe::egui::ScrollArea::vertical()
+                    .max_height(ctx.available_rect().height() * 0.9)
+                    .auto_shrink([false, false])
+                    .id_salt("child_switch_list")
+                    .show(ui, |ui| {
+                        let child_switches = data
+                            .hierarchy
+                            .filter_objects(|f: &MusicSwitchContainer| children.contains(&f.id));
+                        if !child_switches.is_empty() {
+                            ui.separator();
+                        }
+                        for c in child_switches {
+                            for switch in c.paths.children.iter().map(|x| {
+                                if let AudioPathElement::MusicEndpoint(m) = x {
+                                    children.push(m.audio_id);
+                                    return format!("{}", m.from_id);
+                                }
+                                String::new()
+                            }) {
                                 if !self.switch_filter.is_empty()
                                     && !switch
                                         .to_lowercase()
@@ -465,24 +505,17 @@ impl View for PlayerView {
                                 {
                                     continue;
                                 }
-
-
-                                if ui.selectable_value(&mut self.switch, switch.clone(), switch).clicked() {
+                                if ui
+                                    .selectable_value(&mut self.switch, switch.clone(), switch)
+                                    .clicked()
+                                {
                                     self.apply_switch = true;
+                                    self.switch_group
+                                        .store(*c.group_ids.first().unwrap(), Ordering::Relaxed);
                                 }
-
-                                // data.main_switch.paths.children.iter().map(|x| {
-                                //     if let AudioPathElement::MusicEndpoint(m) = x {
-                                //         return format!("{}", m.from_id);
-                                //     }
-                                //     String::new()
-                                // }).for_each(|f| {
-                                //     if ui.selectable_value(&mut self.switch, *f, format!("{}/{:x}", f, f)) {
-                                //         self.apply_switch = true;
-                                //     }
-                                // });
                             }
-                        });
+                        }
+                    });
             });
         if !self.callback_infos.read().is_empty() {
             ctx.request_repaint();
@@ -559,31 +592,47 @@ pub fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
     }
     let main_switch = main_switch.unwrap();
 
-    let play_action = play_actions
-        .iter()
-        .filter(|x| x.object_id == main_switch.id)
-        .collect_vec()[0];
+    // let play_action = play_actions
+    //     .iter()
+    //     .filter(|x| x.object_id == main_switch.id)
+    //     .collect_vec()[0];
 
-    let play_event = &hirc.filter_objects(|x: &Event| x.action_ids.contains(&play_action.id))[0];
+    let play_events = &hirc
+        .filter_objects(|x: &Event| {
+            x.action_ids
+                .iter()
+                .any(|a| play_actions.iter().map(|p| p.id).contains(a))
+        })
+        .iter()
+        .map(|x| x.id)
+        .collect_vec();
 
     let stop_actions =
         &hirc.filter_objects(|x: &EventAction| x.action_type == EventActionType::Stop);
 
-    let matching_stops = stop_actions
+    // let matching_stops = stop_actions
+    //     .iter()
+    //     .filter(|x| x.object_id == main_switch.id)
+    //     .collect_vec();
+
+    // let stop_action = matching_stops.first();
+
+    // if stop_action.is_none() {
+    //     return Err(anyhow::anyhow!(
+    //         "No MusicSwitchContainer objects found in the hierarchy"
+    //     ));
+    // }
+    // let stop_action = stop_action.unwrap();
+
+    let stop_events = &hirc
+        .filter_objects(|x: &Event| {
+            x.action_ids
+                .iter()
+                .any(|a| stop_actions.iter().map(|p| p.id).contains(a))
+        })
         .iter()
-        .filter(|x| x.object_id == main_switch.id)
+        .map(|x| x.id)
         .collect_vec();
-
-    let stop_action = matching_stops.first();
-
-    if stop_action.is_none() {
-        return Err(anyhow::anyhow!(
-            "No MusicSwitchContainer objects found in the hierarchy"
-        ));
-    }
-    let stop_action = stop_action.unwrap();
-
-    let stop_event = &hirc.filter_objects(|x: &Event| x.action_ids.contains(&stop_action.id))[0];
 
     // let tmpdir = std::env::temp_dir().join("azilis");
     // std::fs::create_dir_all(&tmpdir)?;
@@ -656,9 +705,10 @@ pub fn load_bank(data: &mut [u8]) -> anyhow::Result<BankData> {
     Ok(BankData {
         id: loaded_banks[0],
         // externals: externals.to_vec(),
-        play_event_id: play_event.id,
-        stop_event_id: stop_event.id,
+        play_event_ids: play_events.clone(),
+        stop_event_ids: stop_events.clone(),
         main_switch: main_switch.clone(),
         bank_data,
+        hierarchy: hirc.clone(),
     })
 }

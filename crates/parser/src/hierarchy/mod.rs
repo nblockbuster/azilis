@@ -194,7 +194,7 @@ impl ExtractInner<MusicSwitchContainer> for HierarchyObjectType {
     }
 }
 
-#[derive(BinRead, Debug, Clone)]
+#[derive(BinRead, Debug, Clone, Default)]
 pub struct HierarchyChunk {
     pub object_count: u32,
     #[br(ignore)]
@@ -202,7 +202,6 @@ pub struct HierarchyChunk {
 }
 
 impl HierarchyChunk {
-    // #[profiling::function]
     pub fn read_hierarchy(
         &mut self,
         cur: &mut Cursor<&[u8]>,
@@ -234,7 +233,6 @@ impl HierarchyChunk {
         Ok(self.objects.clone())
     }
 
-    // #[profiling::function]
     pub fn get_all_by_type<T>(&self) -> Vec<&T>
     where
         HierarchyObjectType: ExtractInner<T>,
@@ -248,7 +246,6 @@ impl HierarchyChunk {
             .collect::<Vec<&T>>()
     }
 
-    // #[profiling::function]
     pub fn get_all_by_type_mut<T>(&mut self) -> Vec<&mut T>
     where
         HierarchyObjectType: ExtractInner<T>,
@@ -262,7 +259,6 @@ impl HierarchyChunk {
             .collect::<Vec<&mut T>>()
     }
 
-    // #[profiling::function]
     pub fn get_all_by_type_cloned<T>(&self) -> Vec<T>
     where
         HierarchyObjectType: ExtractInner<T>,
@@ -276,18 +272,6 @@ impl HierarchyChunk {
             .collect::<Vec<T>>()
     }
 
-    // pub fn filter_objects<F>(&self, predicate: F) -> Vec<&HierarchyObjectType>
-    // where
-    //     F: Fn(&HierarchyObjectType) -> bool, // Predicate to filter objects
-    // {
-    //     self.objects
-    //         .iter()
-    //         .filter(|x| predicate(&x.obj)) // Apply the predicate
-    //         .map(|x| &x.obj) // Extract the object reference
-    //         .collect()
-    // }
-
-    // #[profiling::function]
     pub fn filter_objects<F, T>(&self, predicate: F) -> Vec<T>
     where
         F: Fn(&T) -> bool + Sync,
@@ -304,7 +288,6 @@ impl HierarchyChunk {
             .collect::<Vec<T>>()
     }
 
-    // #[profiling::function]
     pub fn filter_objects_mut<F, T>(&mut self, predicate: F) -> Vec<T>
     where
         F: Fn(&T) -> bool + Sync,
