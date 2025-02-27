@@ -10,6 +10,8 @@ use egui::{
     },
 };
 
+use super::color::*;
+
 pub const TEXT_HEADER_SIZE: f32 = 18.0;
 pub const TEXT_SUBHEADER_SIZE: f32 = 15.0;
 pub const TEXT_BODY_SIZE: f32 = 12.0;
@@ -73,11 +75,11 @@ pub fn style() -> Style {
             override_text_color: None,
             widgets: Widgets {
                 noninteractive: WidgetVisuals {
-                    bg_fill: Color32::from_rgba_premultiplied(49, 50, 68, 255),
-                    weak_bg_fill: Color32::from_rgba_premultiplied(49, 50, 68, 255),
+                    bg_fill: SURFACE_0,
+                    weak_bg_fill: SURFACE_0,
                     bg_stroke: Stroke {
                         width: 1.0,
-                        color: Color32::from_rgba_premultiplied(108, 112, 134, 255),
+                        color: OVERLAY_0,
                     },
                     corner_radius: CornerRadius {
                         nw: 2,
@@ -87,13 +89,13 @@ pub fn style() -> Style {
                     },
                     fg_stroke: Stroke {
                         width: 1.0,
-                        color: Color32::from_rgba_premultiplied(205, 214, 244, 255),
+                        color: TEXT,
                     },
                     expansion: 0.0,
                 },
                 inactive: WidgetVisuals {
-                    bg_fill: Color32::from_rgba_premultiplied(49, 50, 68, 255),
-                    weak_bg_fill: Color32::from_rgba_premultiplied(49, 50, 68, 255),
+                    bg_fill: SURFACE_0,
+                    weak_bg_fill: SURFACE_0,
                     bg_stroke: Stroke {
                         width: 0.0,
                         color: Color32::from_rgba_premultiplied(0, 0, 0, 0),
@@ -106,16 +108,16 @@ pub fn style() -> Style {
                     },
                     fg_stroke: Stroke {
                         width: 1.0,
-                        color: Color32::from_rgba_premultiplied(205, 214, 244, 255),
+                        color: TEXT,
                     },
                     expansion: 0.0,
                 },
                 hovered: WidgetVisuals {
-                    bg_fill: Color32::from_rgba_premultiplied(49, 50, 68, 255),
-                    weak_bg_fill: Color32::from_rgba_premultiplied(49, 50, 68, 255),
+                    bg_fill: SURFACE_0,
+                    weak_bg_fill: SURFACE_0,
                     bg_stroke: Stroke {
                         width: 1.0,
-                        color: Color32::from_rgba_premultiplied(127, 132, 156, 255),
+                        color: OVERLAY_1,
                     },
                     corner_radius: CornerRadius {
                         nw: 3,
@@ -125,16 +127,16 @@ pub fn style() -> Style {
                     },
                     fg_stroke: Stroke {
                         width: 1.5,
-                        color: Color32::from_rgba_premultiplied(205, 214, 244, 255),
+                        color: TEXT,
                     },
                     expansion: 1.0,
                 },
                 active: WidgetVisuals {
-                    bg_fill: Color32::from_rgba_premultiplied(30, 30, 46, 255),
-                    weak_bg_fill: Color32::from_rgba_premultiplied(30, 30, 46, 255),
+                    bg_fill: MANTLE,
+                    weak_bg_fill: MANTLE,
                     bg_stroke: Stroke {
                         width: 1.0,
-                        color: Color32::from_rgba_premultiplied(127, 132, 156, 255),
+                        color: OVERLAY_1,
                     },
                     corner_radius: CornerRadius {
                         nw: 2,
@@ -144,16 +146,16 @@ pub fn style() -> Style {
                     },
                     fg_stroke: Stroke {
                         width: 2.0,
-                        color: Color32::from_rgba_premultiplied(205, 214, 244, 255),
+                        color: TEXT,
                     },
                     expansion: 1.0,
                 },
                 open: WidgetVisuals {
-                    bg_fill: Color32::from_rgba_premultiplied(30, 30, 46, 255),
-                    weak_bg_fill: Color32::from_rgba_premultiplied(49, 50, 68, 255),
+                    bg_fill: MANTLE,
+                    weak_bg_fill: SURFACE_0,
                     bg_stroke: Stroke {
                         width: 1.0,
-                        color: Color32::from_rgba_premultiplied(24, 24, 37, 255),
+                        color: BASE,
                     },
                     corner_radius: CornerRadius {
                         nw: 2,
@@ -177,7 +179,7 @@ pub fn style() -> Style {
             },
             hyperlink_color: Color32::from_rgba_premultiplied(90, 170, 255, 255),
             faint_bg_color: Color32::from_rgba_premultiplied(5, 5, 5, 0),
-            extreme_bg_color: Color32::from_rgba_premultiplied(17, 17, 27, 255),
+            extreme_bg_color: CRUST,
             code_bg_color: Color32::from_rgba_premultiplied(64, 64, 64, 255),
             warn_fg_color: Color32::from_rgba_premultiplied(255, 143, 0, 255),
             error_fg_color: Color32::from_rgba_premultiplied(255, 0, 0, 255),
@@ -193,10 +195,10 @@ pub fn style() -> Style {
                 blur: 15,
                 offset: [10, 20],
             },
-            window_fill: Color32::from_rgba_premultiplied(24, 24, 37, 255),
+            window_fill: BASE,
             window_stroke: Stroke {
                 width: 1.0,
-                color: Color32::from_rgba_premultiplied(49, 50, 68, 255),
+                color: SURFACE_0,
             },
             menu_corner_radius: CornerRadius {
                 nw: 6,
@@ -204,7 +206,7 @@ pub fn style() -> Style {
                 sw: 6,
                 se: 6,
             },
-            panel_fill: Color32::from_rgba_premultiplied(24, 24, 37, 255),
+            panel_fill: BASE,
             popup_shadow: Shadow {
                 spread: 0,
                 color: Color32::from_rgba_premultiplied(0, 0, 0, 96),

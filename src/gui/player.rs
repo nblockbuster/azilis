@@ -1,7 +1,7 @@
 use chroma_dbg::ChromaDebug;
 use destiny_pkg::TagHash;
 use eframe::egui::ahash::HashMap;
-use eframe::egui::{Color32, Context, FontId, RichText, Ui};
+use eframe::egui::{Color32, Context, FontId, RichText, Ui, SidePanel, TextWrapMode, ScrollArea};
 use eframe::epaint::mutex::RwLock;
 use egui_dropdown::DropDownBox;
 use itertools::Itertools;
@@ -110,8 +110,9 @@ pub struct PlayerView {
     stop_audio: Arc<AtomicBool>,
     audio_thread: Option<JoinHandle<()>>,
 
-    switch_dropdown: String,
-    apply_dropdown: bool,
+    switch: String,
+    switch_filter: String,
+    apply_switch: bool,
 
     callback_infos: Arc<RwLock<HashMap<CallbackType, AkCallbackInfo>>>,
     // pub loaded_bank: u32,
@@ -139,8 +140,9 @@ impl PlayerView {
             current_switch_id: Arc::new(AtomicU32::new(0)),
             stop_audio: Arc::new(AtomicBool::new(false)),
             audio_thread: Default::default(),
-            switch_dropdown: String::new(),
-            apply_dropdown: false,
+            switch: String::new(),
+            switch_filter: String::new(),
+            apply_switch: false,
             callback_infos: Default::default(),
         }
     }
@@ -184,8 +186,9 @@ impl PlayerView {
             audio_thread: Some(std::thread::spawn(|| {
                 Self::audio_thread(should_stop_audio, switch_id)
             })),
-            switch_dropdown: String::new(),
-            apply_dropdown: false,
+            switch: String::new(),
+            switch_filter: String::new(),
+            apply_switch: false,
             callback_infos: Default::default(),
         }
     }
@@ -233,7 +236,7 @@ impl View for PlayerView {
                     0
                 };
 
-            self.switch_dropdown = format!("{}", first_switch);
+            self.switch = format!("{}", first_switch);
 
             self.current_switch_id
                 .store(first_switch, Ordering::Relaxed);
@@ -253,26 +256,27 @@ impl View for PlayerView {
                     ctx.copy_text(self.tag.to_string());
                 }
                 // TODO: Up/Down arrows
-                ui.add(
-                    DropDownBox::from_iter(
-                        data.main_switch.paths.children.iter().map(|x| {
-                            if let AudioPathElement::MusicEndpoint(m) = x {
-                                return format!("{}", m.from_id);
-                            }
-                            String::new()
-                        }),
-                        "Switch IDs",
-                        &mut self.switch_dropdown,
-                        |ui, text| ui.selectable_label(false, text),
-                    )
-                    .max_height(ctx.available_rect().height() * 0.5)
-                    .filter_by_input(false),
-                );
+                // ui.add(
+                //     DropDownBox::from_iter(
+                //         data.main_switch.paths.children.iter().map(|x| {
+                //             if let AudioPathElement::MusicEndpoint(m) = x {
+                //                 return format!("{}", m.from_id);
+                //             }
+                //             String::new()
+                //         }),
+                //         "Switch IDs",
+                //         &mut self.switch_dropdown,
+                //         |ui, text| ui.selectable_label(false, text),
+                //     )
+                //     .max_height(ctx.available_rect().height() * 0.5)
+                //     .filter_by_input(false),
+                // );
+                
 
-                if ui.button(format!("{}", ICON_CHECK)).clicked() {
-                    // self.switch_dropdown = cur_dropdown.clone();
-                    self.apply_dropdown = true;
-                };
+                // if ui.button(format!("{}", ICON_CHECK)).clicked() {
+                //     // self.switch_dropdown = cur_dropdown.clone();
+                //     self.apply_switch = true;
+                // };
 
                 ui.separator();
 
@@ -289,16 +293,16 @@ impl View for PlayerView {
             })
             .response;
 
-        if self.apply_dropdown {
-            self.apply_dropdown = false;
-            info!("Setting switch to {}", self.switch_dropdown);
-            let dropdown_val = self.switch_dropdown.parse::<u32>();
-            if dropdown_val.is_err() {
+        if self.apply_switch {
+            self.apply_switch = false;
+            info!("Setting switch to {}", self.switch);
+            let val = self.switch.parse::<u32>();
+            if val.is_err() {
                 TOASTS.lock().unwrap().error("Could not parse switch ID");
                 return None;
             }
             self.current_switch_id
-                .store(dropdown_val.unwrap(), Ordering::Relaxed);
+                .store(val.unwrap(), Ordering::Relaxed);
         }
         let infos = self.callback_infos.clone();
         if change_event {
@@ -350,97 +354,139 @@ impl View for PlayerView {
         }
 
         if !self.callback_infos.read().is_empty() {
-            eframe::egui::ScrollArea::vertical()
-                .max_height(ctx.available_rect().height() * 0.9)
-                .max_width(bar_resp.rect.width())
-                .auto_shrink([false, false])
-                .id_salt("bank_music_syncs")
-                .show(ui, |ui| {
-                    ui.separator();
-
-                    ui.label(
-                        RichText::new(format!("Switch State ID: {}", self.current_switch_id.load(Ordering::Relaxed)))
-                            .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                    );
-
-                    if let Some(playlist_callback) =
-                        self.callback_infos.read().get(&CallbackType::MusicPlaylist)
-                        && let AkCallbackInfo::MusicPlaylist {
-                            playlist_id,
-                            num_playlist_items,
-                            playlist_selection,
-                            ..
-                        } = playlist_callback
-                    {
-                        {   
-                            ui.label(
-                                RichText::new(format!("Playlist ID: {}", playlist_id,))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            );
-                            ui.label(
-                                RichText::new(format!("Playlist Items: {}", num_playlist_items))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            );
-                            ui.label(
-                                RichText::new(format!("Selected Item: {}", playlist_selection))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            );
-                        }
-                    }
-
-                    ui.separator();
-                    ui.label(RichText::new("Music Syncs").font(FontId::proportional(style::TEXT_HEADER_SIZE)));
-                    ui.separator();
-
-                    for (callback_type, info) in self.callback_infos.read().iter() {
-                        if let AkCallbackInfo::MusicSync { segment_info, .. } = info {
-                            ui.label(
-                                RichText::new(format!("{:#?}", callback_type))
-                                    .font(FontId::proportional(style::TEXT_SUBHEADER_SIZE)),
-                            );
-                            ui.label(
-                                RichText::new(format!("\tCurrent Position: {}", segment_info.iCurrentPosition))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            ).on_hover_text("Current position of the segment, relative to the Entry Cue, in milliseconds. Range is -iPreEntryDuration, iActiveDuration+iPostExitDuration");
-                            ui.label(
-                                RichText::new(format!("\tPre Entry Duration: {}", segment_info.iPreEntryDuration))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            ).on_hover_text("Duration of the pre-entry region of the segment, in milliseconds.");
-                            ui.label(
-                                RichText::new(format!("\tActive Duration: {}", segment_info.iActiveDuration))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            ).on_hover_text("Duration of the active region of the segment (between the Entry and Exit Cues), in milliseconds.");
-                            ui.label(
-                                RichText::new(format!("\tPost Exit Duration: {}", segment_info.iPostExitDuration))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            ).on_hover_text("Duration of the post-exit region of the segment, in milliseconds.");
-                            ui.label(
-                                RichText::new(format!("\tRemaining Look Ahead Time: {}", segment_info.iRemainingLookAheadTime))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            ).on_hover_text("Number of milliseconds remaining in the \"looking-ahead\" state of the segment, when it is silent but streamed tracks are being prefetched.");
-                            ui.label(
-                                RichText::new(format!("\tBeat Duration: {} ({}bpm)", segment_info.fBeatDuration, (60.0/segment_info.fBeatDuration).floor()))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            ).on_hover_text("Beat Duration in seconds.");
-                            ui.label(
-                                RichText::new(format!("\tBar Duration: {}", segment_info.fBarDuration))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            ).on_hover_text("Bar Duration in seconds.");
-                            ui.label(
-                                RichText::new(format!("\tGrid Duration: {}", segment_info.fGridDuration))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            ).on_hover_text("Grid duration in seconds.");
-                            ui.label(
-                                RichText::new(format!("\tGrid Offset: {}", segment_info.fGridOffset))
-                                    .font(FontId::proportional(style::TEXT_BODY_SIZE)),
-                            ).on_hover_text("Grid offset in seconds.");
+            eframe::egui::SidePanel::left("player_info")
+                .min_width(bar_resp.rect.width() * 1.5)
+                .resizable(true)
+                .show_inside(ui, |ui| {
+                    eframe::egui::ScrollArea::vertical()
+                        .max_height(ctx.available_rect().height() * 0.9)
+                        .auto_shrink([false, false])
+                        .id_salt("bank_music_syncs")
+                        .show(ui, |ui| {
                             ui.separator();
-                        }
-                    }
-                    ctx.request_repaint();
-                });
+
+                            ui.label(
+                                RichText::new(format!("Switch State ID: {}", self.current_switch_id.load(Ordering::Relaxed)))
+                                    
+                            );
+
+                            if let Some(playlist_callback) =
+                                self.callback_infos.read().get(&CallbackType::MusicPlaylist)
+                                && let AkCallbackInfo::MusicPlaylist {
+                                    playlist_id,
+                                    num_playlist_items,
+                                    playlist_selection,
+                                    ..
+                                } = playlist_callback
+                            {
+                                {   
+                                    ui.label(
+                                        RichText::new(format!("Playlist ID: {}", playlist_id,))
+                                            
+                                    );
+                                    ui.label(
+                                        RichText::new(format!("Playlist Items: {}", num_playlist_items))
+                                            
+                                    );
+                                    ui.label(
+                                        RichText::new(format!("Selected Item: {}", playlist_selection))
+                                            
+                                    );
+                                }
+                            }
+
+                            ui.separator();
+                            ui.label(RichText::new("Music Syncs").font(FontId::proportional(style::TEXT_HEADER_SIZE)));
+                            ui.separator();
+
+                            for (callback_type, info) in self.callback_infos.read().iter() {
+                                if let AkCallbackInfo::MusicSync { segment_info, .. } = info {
+                                    ui.label(
+                                        RichText::new(format!("{:#?}", callback_type)).font(FontId::proportional(style::TEXT_SUBHEADER_SIZE))
+                                    );
+                                    ui.label(
+                                        RichText::new(format!("\tCurrent Position: {}", segment_info.iCurrentPosition))
+                                    ).on_hover_text("Current position of the segment, relative to the Entry Cue, in milliseconds.\nRange is -PreEntryDuration, ActiveDuration+PostExitDuration");
+                                    ui.label(
+                                        RichText::new(format!("\tPre Entry Duration: {}", segment_info.iPreEntryDuration))
+                                    ).on_hover_text("Duration of the pre-entry region of the segment, in milliseconds.");
+                                    ui.label(
+                                        RichText::new(format!("\tActive Duration: {}", segment_info.iActiveDuration))
+                                    ).on_hover_text("Duration of the active region of the segment (between the Entry and Exit Cues), in milliseconds.");
+                                    ui.label(
+                                        RichText::new(format!("\tPost Exit Duration: {}", segment_info.iPostExitDuration))
+                                    ).on_hover_text("Duration of the post-exit region of the segment, in milliseconds.");
+                                    ui.label(
+                                        RichText::new(format!("\tRemaining Look Ahead Time: {}", segment_info.iRemainingLookAheadTime)) 
+                                    ).on_hover_text("Number of milliseconds remaining in the \"looking-ahead\" state of the segment, when it is silent but streamed tracks are being prefetched.");
+                                    ui.label(
+                                        RichText::new(format!("\tBeat Duration: {} ({}bpm)", segment_info.fBeatDuration, (60.0/segment_info.fBeatDuration).floor()))
+                                    ).on_hover_text("Beat Duration in seconds.");
+                                    ui.label(
+                                        RichText::new(format!("\tBar Duration: {}", segment_info.fBarDuration))
+                                    ).on_hover_text("Bar Duration in seconds.");
+                                    ui.label(
+                                        RichText::new(format!("\tGrid Duration: {}", segment_info.fGridDuration))
+                                    ).on_hover_text("Grid duration in seconds.");
+                                    ui.label(
+                                        RichText::new(format!("\tGrid Offset: {}", segment_info.fGridOffset))
+                                    ).on_hover_text("Grid offset in seconds.");
+                                    ui.separator();
+                                }
+                            }
+                        });
+            });
         }
 
+        eframe::egui::SidePanel::right("switch_list_panel")
+            .min_width(120.0)
+            .resizable(true)
+            .show_inside(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Search:");
+                    ui.text_edit_singleline(&mut self.switch_filter);
+                });
+
+                eframe::egui::ScrollArea::vertical()
+                    .max_height(ctx.available_rect().height() * 0.9)
+                    .auto_shrink([false, false])
+                    .id_salt("switch_list")
+                    .show(ui, |ui| {
+                            for switch in data.main_switch.paths.children.iter().map(|x| {
+                                    if let AudioPathElement::MusicEndpoint(m) = x {
+                                        return format!("{}", m.from_id);
+                                    }
+                                    String::new()
+                                }) {
+                                if !self.switch_filter.is_empty()
+                                    && !switch
+                                        .to_lowercase()
+                                        .contains(&self.switch_filter.to_lowercase())
+                                {
+                                    continue;
+                                }
+
+
+                                if ui.selectable_value(&mut self.switch, switch.clone(), switch).clicked() {
+                                    self.apply_switch = true;
+                                }
+
+                                // data.main_switch.paths.children.iter().map(|x| {
+                                //     if let AudioPathElement::MusicEndpoint(m) = x {
+                                //         return format!("{}", m.from_id);
+                                //     }
+                                //     String::new()
+                                // }).for_each(|f| {
+                                //     if ui.selectable_value(&mut self.switch, *f, format!("{}/{:x}", f, f)) {
+                                //         self.apply_switch = true;
+                                //     }
+                                // });
+                            }
+                        });
+            });
+        if !self.callback_infos.read().is_empty() {
+            ctx.request_repaint();
+        }
         None
     }
 }
