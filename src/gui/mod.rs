@@ -57,22 +57,12 @@ impl AzilisApp {
                 "../../assets/fonts/materialdesignicons-webfont.ttf"
             ))),
         );
-        fonts.font_data.insert(
-            "Destiny_Keys".into(),
-            egui::FontData::from_static(include_bytes!("../../assets/fonts/Destiny_Keys.otf"))
-                .into(),
-        );
 
         fonts
             .families
             .entry(egui::FontFamily::Proportional)
             .or_default()
             .insert(0, "materialdesignicons".to_owned());
-        fonts
-            .families
-            .entry(egui::FontFamily::Proportional)
-            .or_default()
-            .insert(1, "Destiny_Keys".to_owned());
 
         cc.egui_ctx.set_fonts(fonts);
         set_game_object_output_bus_volume(100, 1, config!().audio.volume).unwrap();

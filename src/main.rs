@@ -80,7 +80,7 @@ fn main() -> Result<()> {
     // let _profiler = dhat::Profiler::new_heap();
 
     env_logger::Builder::from_env(
-        Env::default().default_filter_or("info,wgpu_core=warn,wgpu_hal=warn"),
+        Env::default().default_filter_or("info,rrise=debug,wgpu_core=warn,wgpu_hal=warn"),
     )
     .init();
 
