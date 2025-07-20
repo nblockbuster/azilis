@@ -1,0 +1,45 @@
+[package]
+name = "azilis"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4.5", features = ["derive"] }
+ctrlc = "3"
+destiny-pkg = "0.15.1"
+env_logger = "0.11"
+log = "0.4"
+rrise = { path = "../rrise", features = ["AkVorbisDecoder", "AkMeterFX"] }
+azilis-parser = { path = "../azilis-parser" }
+eframe = { version = "0.31", default-features = false, features = [
+    "default_fonts",
+    "persistence",
+    "wgpu",
+] }
+chroma-dbg = "0.1"
+itertools = "0.14"
+rayon = "1.10"
+profiling = "1"
+lazy_static = "1"
+poll-promise = "0.3"
+egui-dropdown = "0.13"
+game-detector = "0.1"
+egui-notify = "0.19"
+dhat = "0.3"
+mimalloc = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+directories = "6"
+hound = "3.5"
+
+[features]
+profiler = ["profiling/profile-with-tracy", "azilis-parser/profiler"]
+dhat-heap = []
+dhat-ad-hoc = []
+
+[profile.dev.package.destiny-pkg]
+opt-level = 3
+
+[profile.release.package.rrise]
+opt-level = 0

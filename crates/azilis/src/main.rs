@@ -1,4 +1,4 @@
-#![feature(let_chains)]
+// #![feature(let_chains)]
 mod config;
 mod gui;
 mod package_manager;

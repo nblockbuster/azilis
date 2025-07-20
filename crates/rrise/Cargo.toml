@@ -1,8 +1,10 @@
 [package]
 name = "rrise"
 version = "0.2.3"
-edition = "2021"
-authors = ["David Taralla <davidtaralla@gmail.com> & Contributors to the Rrise project"]
+edition = "2024"
+authors = [
+    "David Taralla <davidtaralla@gmail.com> & Contributors to the Rrise project",
+]
 description = "A rust binding for Wwise"
 repository = "https://github.com/dtaralla/rrise"
 documentation = "https://dtaralla.github.io/rrise/"
@@ -10,16 +12,7 @@ readme = "README.md"
 keywords = ["library", "sound", "3D", "wwise"]
 categories = ["multimedia", "game-development"]
 license-file = "LICENSE"
-exclude = [
-    "/examples/WwiseProject/Originals",
-    "/videos",
-]
-
-[workspace]
-members = ["rrise-headers"]
-
-[patch.crates-io]
-rrise-headers = { path = "rrise-headers" }
+exclude = ["/examples/WwiseProject/Originals", "/videos"]
 
 [dependencies]
 cc = { version = "1.2", optional = true }
@@ -112,11 +105,14 @@ required-features = [
     "AkSynthOneSource",
     "AkTimeStretchFX",
     "AkToneSource",
-    "AkTremoloFX"
+    "AkTremoloFX",
 ]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wwrelease)', 'cfg(wwdebug)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(wwrelease)',
+    'cfg(wwdebug)',
+] }
 
 [profile.dev.package.destiny-pkg]
 opt-level = 3
