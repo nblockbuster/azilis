@@ -72,37 +72,6 @@ pub struct AuxSendsBehaviour {
     unused: modular_bitfield::prelude::B4,
 }
 
-#[derive(Specifier, Debug, Clone, PartialEq)]
-#[bits = 2]
-pub enum CodeTypeMask {
-    IL,
-    Native,
-    OPTIL,
-    Runtime,
-}
-
-#[derive(Specifier, Debug, Clone, PartialEq)]
-#[bits = 1]
-pub enum ManagedMask {
-    Managed,
-    Unmanaged,
-}
-
-#[bitfield]
-#[derive(BinRead, Default, Debug, Clone, PartialEq)]
-#[br(map = Self::from_bytes)]
-pub struct MethodImplAttributes {
-    code_type: CodeTypeMask,
-    managed: ManagedMask,
-    forward_def: bool,
-    preserve_sig: bool,
-    internal_call: bool,
-    synchronized: bool,
-    no_inlining: bool,
-    max_method_impl_val: B2,
-    no_optimization: bool,
-}
-
 #[bitfield]
 #[derive(BinRead, Default, Debug, Clone, PartialEq)]
 #[br(map = Self::from_bytes)]
